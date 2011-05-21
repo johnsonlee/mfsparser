@@ -13,7 +13,8 @@ LDFLAGS  :=
 SOURCES  := $(SRCDIR)/bytebuffer.c \
             $(SRCDIR)/crc.c        \
             $(SRCDIR)/mfsparser.c  \
-            $(SRCDIR)/stack.c
+            $(SRCDIR)/stack.c      \
+            $(SRCDIR)/mfstypes.c
 
 OBJECTS  := $(patsubst %.c, $(OBJDIR)/%.o, $(notdir $(SOURCES)))
 
