@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <bytebuffer.h>
 
 #ifndef __MFS_TYPES_H__
@@ -15,7 +16,6 @@ typedef enum SampleRate              SampleRate;
 typedef enum FrameType               FrameType;
 typedef enum DataUnitType            DataUnitType;
 
-typedef struct FrameLength           FrameLength;           // multiplex frame length
 typedef struct NextFrameParam        NextFrameParam;        // next multiplex frame parameter
 typedef struct MuxFrameHeader        MuxFrameHeader;        // multiplex frame header
 typedef struct FreqPoint             FreqPoint;             // freqency point
@@ -117,220 +117,195 @@ enum DataUnitType
     DATA_UNIT_TYPE_ESG
 };
 
-struct FrameLength
-{
-    unsigned int length                   : 24;
-};
-
 struct NextFrameParam
 {
-    unsigned char header_length           : 8;
-    unsigned int frame1_length            : 24;
-    unsigned int frame1_header_length     : 8;
+    uint32_t header_length                 : 8;
+    uint32_t frame1_length                 : 24;
+    uint8_t frame1_header_length           : 8;
 };
 
 struct MuxFrameHeader
 {
-    unsigned int start_code               : 32;
+    uint32_t start_code               : 32;
 
-    unsigned char length                  : 8;
+    uint32_t length                   : 8;
+    uint32_t protocol_version         : 5;
+    uint32_t protocal_min_version     : 5;
+    uint32_t id                       : 6;
+    uint32_t EB_flag                  : 2;
+    uint32_t NFP_flag                 : 1;
+    uint32_t CTUIA_flag               : 2;
+    uint32_t                          : 3;
 
-    unsigned char protocol_version        : 5;
-    unsigned char protocal_min_version    : 5;
-    unsigned char id                      : 6;
+    uint32_t NIT_update_index         : 4;
+    uint32_t CMCT_update_index        : 4;
+    uint32_t CSCT_update_index        : 4;
+    uint32_t SMCT_update_index        : 4;
+    uint32_t SSCT_update_index        : 4;
+    uint32_t ESG_update_index         : 4;
+    uint32_t                          : 4;
+    uint32_t sub_frame_number         : 4;
 
-    unsigned char EB_flag                 : 2;
-    unsigned char NFP_flag                : 1;
-    unsigned char CTUIA_flag              : 2;
-    unsigned char                         : 3;
-
-    unsigned char NIT_update_index        : 4;
-    unsigned char CMCT_update_index       : 4;
-
-    unsigned char CSCT_update_index       : 4;
-    unsigned char SMCT_update_index       : 4;
-
-    unsigned char SSCT_update_index       : 4;
-    unsigned char ESG_update_index        : 4;
-
-    unsigned char sub_frame_number        : 4;
-    unsigned char                         : 0;
-
-    FrameLength *sub_frame_lengths;
+    uint32_t *sub_frame_lengths;
 
     NextFrameParam *next_frame_params;
 };
 
 struct FreqPoint
 {
-    unsigned char index                   : 8;
-
-    unsigned int central_freq             : 32;
-
-    unsigned char band_width              : 4;
-    unsigned char                         : 0;
+    uint64_t index                        : 8;
+    uint64_t central_freq                 : 32;
+    uint64_t band_width                   : 4;
+    uint64_t                              : 0;
 };
 
 struct AdjacentNet
 {
-    unsigned char level                   : 4;
-    unsigned int id                       : 12;
+    uint64_t level                        : 4;
+    uint64_t id                           : 12;
+    uint64_t freq_point_index             : 8;
+    uint64_t central_freq                 : 32;
+    uint64_t band_width                   : 4;
+    uint64_t                              : 4;
+};
 
-    unsigned char freq_point_index        : 8;
-
-    unsigned int central_freq             : 32;
-
-    unsigned char band_width              : 4;
-    unsigned char                         : 0;
+struct TimeSlot
+{
+    uint8_t index                         : 6;
+    uint8_t                               : 2;
 };
 
 struct MuxFrameParam
 {
-    unsigned char id                      : 6;
-    unsigned char RS_rate                 : 2;
+    uint32_t id                           : 6;
+    uint32_t RS_rate                      : 2;
+    uint32_t byte_interleave_mode         : 2;
+    uint32_t LDPC_rate                    : 2;
+    uint32_t modulation_method            : 2;
+    uint32_t reserved                     : 1;
+    uint32_t scramble_method              : 3;
+    uint32_t time_slot_number             : 6;
+    uint32_t sub_frame_number             : 4;
+    uint32_t                              : 4;
 
-    unsigned char byte_interleave_mode    : 2;
-    unsigned char LDPC_rate               : 2;
-    unsigned char modulation_method       : 2;
-    unsigned char reserved                : 1;
-    unsigned char scramble_method         : 3;
-    unsigned char time_slot_number        : 6;
-
-    TimeSlot *time_slots;
-
-    unsigned char sub_frame_number        : 4;
-    unsigned char                         : 0;
-
-    MuxSubFrameParam *sub_frame_params;
+    TimeSlot **time_slots;
+    MuxSubFrameParam **sub_frame_params;
 };
 
 struct MuxSubFrameParam
 {
-    unsigned char sub_frame_id            : 4;
-    unsigned char                         : 0;
-
-    unsigned int service_id               : 16;
+    uint32_t sub_frame_id                 : 4;
+    uint32_t                              : 4;
+    uint32_t service_id                   : 16;
 };
 
 struct Service
 {
-    unsigned int id                       : 16;
-    unsigned char freq_point_index        : 8;
+    uint32_t id                           : 16;
+    uint32_t freq_point_index             : 8;
 };
 
 struct NIT
 {
-    unsigned char id                      : 8;
+    uint32_t id                           : 8;
+    uint32_t NIT_update_index             : 4;
+    uint32_t                              : 4;
+    uint32_t MJD                          : 16;
 
-    unsigned char NIT_update_index        : 4;
-    unsigned char                         : 0;
+    uint64_t BCD                          : 24;
+    uint64_t country_code                 : 24;
+    uint64_t net_level                    : 4;
+    uint64_t net_id                       : 12;
 
-    unsigned int MJD                      : 16;
-    unsigned int BCD                      : 24;
+    uint8_t net_name_length               : 8;
 
-    unsigned int country_code             : 24;
+    uint8_t *net_name;
 
-    struct
-    {
-        unsigned int level                : 4;
-        unsigned int id                   : 12;
-        unsigned char name_length         : 8;
-        unsigned char *name;
-    } network;
+    uint8_t freq_point_index              : 8;
 
-    unsigned char freq_point_index        : 8;
+    uint32_t central_freq                 : 32;
 
-    unsigned int central_freq             : 32;
+    uint16_t band_width                   : 4;
+    uint16_t other_freq_point_number      : 4;
+    uint16_t adjacent_net_number          : 4;
+    uint16_t                              : 4;
 
-    unsigned char band_width              : 4;
-    unsigned char other_freq_point_number : 4;
+    FreqPoint **other_freq_points;
 
-    FreqPoint *other_freq_points;
-
-    unsigned char adjacent_net_number     : 4;
-    unsigned char                         : 0;
-
-    AdjacentNet *adjacent_nets;
+    AdjacentNet **adjacent_nets;
 };
 
 struct XMCT
 {
-    unsigned char id                      : 8;
-    unsigned char freq_point_index        : 8;
+    uint32_t id                           : 8;
+    uint32_t freq_point_index             : 8;
+    uint32_t update_index                 : 4;
+    uint32_t                              : 6;
+    uint32_t mux_frame_number             : 6;
 
-    unsigned char update_index            : 4;
-    unsigned char                         : 0;
-
-    unsigned char mux_frame_number        : 6;
-    unsigned char                         : 0;
-
-    MuxFrameParam *mux_frame_params;
+    MuxFrameParam **mux_frame_params;
 };
 
 struct XSCT
 {
-    unsigned char id                      : 8;
+    uint32_t id                           : 8;
+    uint32_t seg_length                   : 16;
+    uint32_t seg_index                    : 8;
 
-    unsigned int seg_length               : 16;
+    uint32_t seg_number                   : 8;
+    uint32_t update_index                 : 4;
+    uint32_t                              : 4;
+    uint32_t service_number               : 16;
 
-    unsigned char seg_index               : 8;
+    Service **services;
+};
 
-    unsigned char seg_number              : 8;
-
-    unsigned char update_index            : 4;
-    unsigned char                         : 0;
-
-    unsigned int service_number           : 16;
-
-    Service *services;
+struct ESGBDT
+{
 };
 
 struct EB
 {
-    unsigned char id                      : 8;
+    uint32_t id                           : 8;
+    uint32_t                              : 6;
+    uint32_t index                        : 2;
+    uint32_t data_length                  : 16;
 
-    unsigned char index                   : 2;
-    unsigned char                         : 0;
-
-    unsigned int data_length              : 16;
-
-    unsigned char *data;
+    uint8_t *data;
 };
 
 struct SectionSize
 {
-    unsigned int length                   : 21;
-    unsigned int stream_number            : 3;
+    uint32_t length                       : 21;
+    uint32_t stream_number                : 3;
 };
 
 struct DisplayParam
 {
-    unsigned int x                        : 6;
-    unsigned int y                        : 6;
-    unsigned int piority                  : 3;
-    unsigned int                          : 0;
+    uint16_t x                            : 6;
+    uint16_t y                            : 6;
+    uint16_t piority                      : 3;
+    uint16_t                              : 1;
 };
 
 struct ResolutionParam
 {
-    unsigned int width                    : 10;
-    unsigned int height                   : 10;
-    unsigned int                          : 0;
+    uint32_t                              : 4;
+    uint32_t width                        : 10;
+    uint32_t height                       : 10;
 };
 
 struct VideoStreamParam
 {
-    unsigned char algorithm_type          : 3;
-    unsigned char code_rate_flag          : 1;
-    unsigned char display_flag            : 1;
-    unsigned char resolution_flag         : 1;
-    unsigned char frame_freq_flag         : 1;
-    unsigned char                         : 0;
-
-    unsigned int code_rate                : 16;
-
-    unsigned char frame_freq              : 4;
-    unsigned char                         : 0;
+    uint32_t algorithm_type               : 3;
+    uint32_t code_rate_flag               : 1;
+    uint32_t display_flag                 : 1;
+    uint32_t resolution_flag              : 1;
+    uint32_t frame_freq_flag              : 1;
+    uint32_t                              : 1;
+    uint32_t code_rate                    : 16;
+    uint32_t frame_freq                   : 4;
+    uint32_t                              : 4;
 
     DisplayParam *display_param;
     ResolutionParam *resolution_param;
@@ -338,48 +313,46 @@ struct VideoStreamParam
 
 struct AudioStreamParam
 {
-    unsigned char algorithm_type          : 4;
-    unsigned char code_rate_flag          : 1;
-    unsigned char sample_rate_flag        : 1;
-    unsigned char desc_flag               : 1;
-    unsigned char                         : 0;
+    uint32_t algorithm_type               : 4;
+    uint32_t code_rate_flag               : 1;
+    uint32_t sample_rate_flag             : 1;
+    uint32_t desc_flag                    : 1;
+    uint32_t                              : 1;
+    uint32_t code_rate                    : 14;
+    uint32_t                              : 2;
+    uint32_t sample_rate                  : 4;
+    uint32_t                              : 4;
 
-    unsigned int code_rate                : 14;
-    unsigned int                          : 0;
-
-    unsigned char sample_rate             : 4;
-    unsigned char                         : 0;
-
-    unsigned int desc                     : 24;
+    uint32_t desc                         : 24;
 };
 
 struct VideoUnitParam
 {
-    unsigned int length                   : 16;
+    uint16_t length                       : 16;
 
-    unsigned char frame_type              : 3;
-    unsigned char stream_index            : 3;
-    unsigned char frame_end_flag          : 1;
-    unsigned char play_time_flag          : 1;
+    uint16_t frame_type                   : 3;
+    uint16_t stream_index                 : 3;
+    uint16_t frame_end_flag               : 1;
+    uint16_t play_time_flag               : 1;
+    uint16_t                              : 8;
 
-    unsigned int play_time                : 16;
+    uint16_t play_time                    : 16;
 };
 
 struct AudioUnitParam
 {
-    unsigned int length                   : 16;
+    uint16_t length                       : 16;
 
-    unsigned char stream_index            : 3;
-    unsigned char                         : 0;
+    uint16_t stream_index                 : 3;
+    uint16_t                              : 0;
 
-    unsigned int play_time                : 16;
+    uint16_t play_time                    : 16;
 };
 
 struct DataUnitParam
 {
-    unsigned char type                    : 8;
-
-    unsigned int length                   : 16;
+    uint16_t type                         : 8;
+    uint16_t length                       : 16;
 };
 
 struct MuxSubFrame
@@ -392,16 +365,15 @@ struct MuxSubFrame
 
 struct MuxSubFrameHeader
 {
-    unsigned char length                  : 8;
+    uint32_t length                       : 8;
+    uint32_t start_play_time_flag         : 1;
+    uint32_t video_section_flag           : 1;
+    uint32_t audio_section_flag           : 1;
+    uint32_t data_section_flag            : 1;
+    uint32_t ext_flag                     : 1;
+    uint32_t                              : 0;
 
-    unsigned char start_play_time_flag    : 1;
-    unsigned char video_section_flag      : 1;
-    unsigned char audio_section_flag      : 1;
-    unsigned char data_section_flag       : 1;
-    unsigned char ext_flag                : 1;
-    unsigned char                         : 0;
-
-    unsigned int start_play_time          : 32;
+    uint32_t start_play_time              : 32;
 
     SectionSize *video_section_size;
     SectionSize *audio_section_size;
@@ -413,8 +385,8 @@ struct MuxSubFrameHeader
 
 struct VideoSection
 {
-    unsigned int header_length            : 12;
-    unsigned int                          : 4;
+    uint32_t header_length                : 12;
+    uint32_t                              : 4;
 
     VideoUnitParam **unit_params;
     ByteBuffer **units;
@@ -422,7 +394,7 @@ struct VideoSection
 
 struct AudioSection
 {
-    unsigned char unit_number             : 8;
+    uint8_t unit_number                   : 8;
 
     AudioUnitParam **unit_params;
     ByteBuffer **units;
@@ -430,10 +402,51 @@ struct AudioSection
 
 struct DataSection
 {
-    unsigned char unit_number             : 8;
+    uint8_t unit_number                   : 8;
 
     DataUnitParam **unit_params;
     ByteBuffer **units;
 };
+
+#define construct(type) malloc(sizeof(type))
+
+#define nconstruct(type, n) malloc(sizeof(type) * (n));
+
+#define finalize(object) free(object); object = NULL
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern void next_frame_param_free(NextFrameParam**);
+extern void mux_frame_header_free(MuxFrameHeader**);
+extern void freq_point_free(FreqPoint**);
+extern void adjacent_net_free(AdjacentNet**);
+extern void time_slot_free(TimeSlot**);
+extern void mux_frame_param_free(MuxFrameParam**);
+extern void mux_sub_frame_param_free(MuxSubFrameParam**);
+extern void service_free(Service**);
+extern void nit_free(NIT**);
+extern void xmct_free(XMCT**);
+extern void xsct_free(XSCT**);
+extern void esgbdt_free(ESGBDT**);
+extern void eb_free(EB**);
+extern void section_size_free(SectionSize**);
+extern void display_param_free(DisplayParam**);
+extern void resolution_param_free(ResolutionParam**);
+extern void video_stream_param_free(VideoStreamParam**);
+extern void audio_stream_param_free(AudioStreamParam**);
+extern void video_unit_param_free(VideoUnitParam**);
+extern void audio_unit_param_free(AudioUnitParam**);
+extern void data_unit_param_free(DataUnitParam**);
+extern void mux_sub_frame_free(MuxSubFrame**);
+extern void mux_sub_frame_header_free(MuxSubFrameHeader**);
+extern void video_section_free(VideoSection**);
+extern void audio_section_free(AudioSection**);
+extern void data_section_free(DataSection**);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __MFS_TYPES_H__ */
