@@ -3,33 +3,36 @@
 #ifndef __MFS_PARSER_H__
 #define __MFS_PARSER_H__
 
-typedef struct MFSParserVisitor MFSParserVisitor;
-typedef enum MFSParserState MFSParserState;
+typedef enum MFSParserState     MFSParserState;     // 解析器状态
+typedef struct MFSParser        MFSParser;          // MFS解析器
+typedef struct MFSParserVisitor MFSParserVisitor;   // MFS解析器访问器
 
 enum MFSParserState
 {
-    STATE_NONE = 0
+    STATE_NONE = 0x00,  // 初始状态
+    STATE_CIT,          // 控制信息表
+    STATE_MSF,          // 复用子帧
 };
 
 struct MFSParserVisitor
 {
-    void* (*visit_mux_frame_header)(MuxFrameHeader*, void*);
-    void* (*visit_NIT)(NIT*, void*);
-    void* (*visit_XMCT)(XMCT*, void*);
-    void* (*visit_XSCT)(XSCT*, void*);
-    void* (*visit_ESGBDT)(ESGBDT*, void*);
-    void* (*visit_EB)(EB*, void*);
-    void* (*visit_mux_sub_frame_header)(MuxSubFrameHeader*, void*);
-    void* (*visit_video_section)(VideoSection*, void*);
-    void* (*visit_audio_section)(AudioSection*, void*);
-    void* (*visit_data_section)(DataSection*, void*);
+    void* (*visit_NIT)(NIT *nit, void *obj);
+    void* (*visit_CMCT)(CMCT *cmct, void *obj);
+    void* (*visit_SMCT)(SMCT *smct, void *obj);
+    void* (*visit_CSCT)(CSCT *csct, void *obj);
+    void* (*visit_SSCT)(SSCT *ssct, void *obj);
+    void* (*visit_ESGBDT)(ESGBDT *esgbdt, void *obj);
+    void* (*visit_EB)(EB *eb, void *obj);
+    void* (*visit_video_section)(MuxSubFrameHeader *msfh, VideoSection *vs, void *obj);
+    void* (*visit_audio_section)(MuxSubFrameHeader *msfh, AudioSection *as, void *obj);
+    void* (*visit_data_section)(MuxSubFrameHeader *msfh, DataSection *ds, void *obj);
 };
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-extern void parse_mux_frame(ByteBuffer *buf, MFSParserVisitor *visitor);
+extern void parse_mux_frame(MFSParser *parser, MFSParserVisitor *visitor);
 
 #ifdef __cplusplus
 }
