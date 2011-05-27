@@ -9,32 +9,30 @@
 #ifndef __DEBUG_H__
 #define __DEBUG_H__
 
-#ifdef __ANDROID__
+#ifndef __LOG_TAG__
+#define __LOG_TAG__ ""
+#endif
 
-#define debug(fmt, ...)                                                        \
-	__android_log_print(ANDROID_LOG_DEBUG, "", "%s#%s:%d "fmt, __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
-
-#define info(fmt, ...)                                                         \
-	__android_log_print(ANDROID_LOG_INFO, "", fmt, ##__VA_ARGS__)
-
-#define error(fmt, ...)                                                        \
-	__android_log_print(ANDROID_LOG_ERROR, "", fmt, ##__VA_ARGS__)
-
+#if defined(__ANDROID__)
+#  define debug(fmt, ...)                                                      \
+     __android_log_print(ANDROID_LOG_DEBUG, __LOG_TAG__, "%s:%d "fmt,          \
+             __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#  define info(fmt, ...)                                                       \
+     __android_log_print(ANDROID_LOG_INFO, __LOG_TAG__, fmt, ##__VA_ARGS__)
+#  define warn(fmt, ...)                                                       \
+     __android_log_print(ANDROID_LOG_WARN, __LOG_TAG__, fmt, ##__VA_ARGS__)
+#  define error(fmt, ...)                                                      \
+     __android_log_print(ANDROID_LOG_ERROR, __LOG_TAG__, fmt, ##__VA_ARGS__)
+#elif defined(__DEBUG__)
+#  define debug printf("%s#%s:%d ", __FILE__, __FUNCTION__, __LINE__); printf
+#  define warn(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
+#  define info printf
+#  define error(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 #else
-
-#ifdef __DEBUG__
-#define debug                                                                  \
-	printf("%s#%s:%d ", __FILE__, __FUNCTION__, __LINE__);                     \
-	printf
-#else
-#define debug(fmt, ...)
-#endif /* __DEBUG__ */
-
-#define info printf
-
-#define error(fmt, ...)                                                        \
-	fprintf(stderr, fmt, ##__VA_ARGS__)
-
-#endif /* __ANDROID__ */
+#  define debug(fmt, ...)
+#  define info(fmt, ...)
+#  define warn(fmt, ...)
+#  define error(fmt, ...)
+#endif
 
 #endif /* __DEBUG_H__ */

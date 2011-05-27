@@ -10,7 +10,7 @@ DEFINES  += -D__DEBUG__
 CFLAGS   := -ggdb -O0 -g3 -Wall -I$(PWD)/include
 LDFLAGS  := 
 
-SOURCES  := $(SRCDIR)/bytebuffer.c \
+SOURCES  := $(SRCDIR)/bytestream.c \
             $(SRCDIR)/crc.c        \
             $(SRCDIR)/mfsparser.c  \
             $(SRCDIR)/stack.c      \
