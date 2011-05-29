@@ -7,15 +7,20 @@
 #include <crc.h>
 #include <mfsparser.h>
 
-#define PARSE_END_IF(exp) if (exp) goto __PARSE_END__
+#undef  __LOG_TAG__
+#define __LOG_TAG__         "MFSParser"
 
-#define START_CODE   0x00000001
+#define BUF_SIZE            80960
+
+#define START_CODE          0x00000001
 
 #define DAT_FILE_DIR        ".cmmb"
 #define DAT_FILE_ESGBDT     DAT_FILE_DIR"/ESGBDT.dat"
 #define DAT_FILE_TS0        DAT_FILE_DIR"/TS0.dat"
 #define DAT_FILE_MFS_ESG    DAT_FILE_DIR"/MFS-ESG.dat"
 #define DAT_FILE_ESG        DAT_FILE_DIR"/ESG.dat"
+
+#define PARSE_END_IF(exp) if (exp) goto __PARSE_END__
 
 struct MFSParser
 {
@@ -341,13 +346,13 @@ static XSCT* parse_XSCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor 
     return xsct;
 }
 
-static ESGBDT* parse_ESGBDT(MFSParser *parser, MFSParserVisitor *visitor)
+static ESGBDT* parse_ESGBDT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
 {
     ESGBDT *esgbdt = malloc(sizeof(ESGBDT));
+    size_t frm_size = parser->mf_header->sub_frame_lengths[parser->msf_index];
 
 #if 0
     char esg_dat[512];
-    size_t frm_size = parser->mf_header->sub_frame_lengths[parser->msf_index];
     unsigned char *buf = malloc(sizeof(unsigned char) * frm_size);
 
     sprintf(esg_dat, "%s/"DAT_FILE_ESGBDT, getenv("HOME"));
@@ -360,6 +365,8 @@ static ESGBDT* parse_ESGBDT(MFSParser *parser, MFSParserVisitor *visitor)
     }
 
     free(buf);
+#else
+    stream_reads(stream, NULL, frm_size);
 #endif
 
     return esgbdt;
@@ -1335,7 +1342,7 @@ __PARSE_BEGIN__:
             case CIT_ESGBDT:
                 stream_unread(stream);
 
-                ESGBDT *esgbdt = parse_ESGBDT(parser, visitor);
+                ESGBDT *esgbdt = parse_ESGBDT(parser, stream, visitor);
                 PARSE_END_IF(NULL == esgbdt);
 
                 if (visitor && visitor->visit_ESGBDT) {
@@ -1494,36 +1501,45 @@ static MFSParserVisitor visitor = {
     visit_data_section
 };
 
-#define ESG
+static void usage(void)
+{
+    info("\n");
+    info("******************************** MFS Parser Usage ******************************\n");
+    info("\n");
+    info("mfsparser <file> [buffer size]\n\n");
+    info("\n");
+    info("********************************************************************************\n");
+}
 
 int main(int argc, char **argv)
 {
-    char path[255];
-
-#if defined(TS0)
-    #define BUF_SIZE 659
-    #define DAT_FILE DAT_FILE_TS0
-#elif defined(ESG)
-    #define BUF_SIZE 13028
-    #define DAT_FILE DAT_FILE_MFS_ESG
-#else
-    #define BUF_SIZE 80960
-    #define DAT_FILE DAT_FILE_DIR"/53.dat"
-#endif
-
-    unsigned char buf[BUF_SIZE];
-    sprintf(path, "%s/"DAT_FILE, getenv("HOME"));
-    int fd_dat = open(path, O_RDONLY);
-    if (-1 == fd_dat) {
-        error("file %s not exists!\n", path);
+    if (argc < 2) {
+        error("\ntoo few args\n");
+        usage();
         exit(0);
     }
 
+    unsigned char *buf;
+    char *path = argv[1];
+    long int buf_size = BUF_SIZE;
+    int fd_dat = open(argv[1], O_RDONLY);
+
+    if (argc > 2) {
+        buf_size = atol(argv[2]);
+    }
+    info("buffer size:%ld\n", buf_size);
+
+    if (-1 == fd_dat) {
+        error("open file %s failed!\n", path);
+        exit(0);
+    }
+
+    buf = malloc(buf_size);
     ByteStream *stream = stream_new();
     MFSParser *parser = mfsparser_new();
 
-    while (0 < read(fd_dat, buf, BUF_SIZE)) {
-        stream_write(stream, buf, BUF_SIZE);
+    while (0 < read(fd_dat, buf, buf_size)) {
+        stream_write(stream, buf, buf_size);
         mfsparser_parse(parser, stream, &visitor);
     }
 
@@ -1531,6 +1547,7 @@ int main(int argc, char **argv)
     stream_free(&stream);
 
     close(fd_dat);
+    free(buf);
 
     return 0;
 }

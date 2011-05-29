@@ -135,9 +135,6 @@ void mux_sub_frame_free(MuxSubFrame **msf)
 
             free((*msf)->video_section);
             (*msf)->video_section = NULL;
-
-            free((*msf)->header->video_section_size);
-            (*msf)->header->video_section_size = NULL;
         }
 
         // 音频段
@@ -154,9 +151,6 @@ void mux_sub_frame_free(MuxSubFrame **msf)
 
             free((*msf)->audio_section);
             (*msf)->audio_section = NULL;
-
-            free((*msf)->header->audio_section_size);
-            (*msf)->header->audio_section_size = NULL;
         }
 
         // 数据段
@@ -173,9 +167,6 @@ void mux_sub_frame_free(MuxSubFrame **msf)
 
             free((*msf)->data_section);
             (*msf)->data_section = NULL;
-
-            free((*msf)->header->data_section_size);
-            (*msf)->header->data_section_size = NULL;
         }
 
         // 子帧头

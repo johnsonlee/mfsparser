@@ -6,8 +6,8 @@
 #include <android/log.h>
 #endif
 
-#ifndef __DEBUG_H__
-#define __DEBUG_H__
+#ifndef __LOG_H__
+#define __LOG_H__
 
 #ifndef __LOG_TAG__
 #define __LOG_TAG__ ""
@@ -23,8 +23,12 @@
      __android_log_print(ANDROID_LOG_WARN, __LOG_TAG__, fmt, ##__VA_ARGS__)
 #  define error(fmt, ...)                                                      \
      __android_log_print(ANDROID_LOG_ERROR, __LOG_TAG__, fmt, ##__VA_ARGS__)
-#elif defined(__DEBUG__)
-#  define debug printf("%s#%s:%d ", __FILE__, __FUNCTION__, __LINE__); printf
+#elif defined(__X86__)
+#  if defined(__DEBUG_BY_STEP__)
+#    define debug getchar(); printf("%s#%s:%d ", __FILE__, __FUNCTION__, __LINE__); printf
+#  else
+#    define debug printf("%s#%s:%d ", __FILE__, __FUNCTION__, __LINE__); printf
+#  endif
 #  define warn(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 #  define info printf
 #  define error(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
@@ -35,4 +39,4 @@
 #  define error(fmt, ...)
 #endif
 
-#endif /* __DEBUG_H__ */
+#endif /* __LOG_H__ */

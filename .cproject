@@ -31,8 +31,8 @@
 <option id="gnu.c.compiler.option.include.paths.1181387547" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
 <listOptionValue builtIn="false" value="&quot;${workspace_loc:/mfsparser/include}&quot;"/>
 </option>
-<option id="gnu.c.compiler.option.preprocessor.def.symbols.362140976" superClass="gnu.c.compiler.option.preprocessor.def.symbols" valueType="definedSymbols">
-<listOptionValue builtIn="false" value="__DEBUG__"/>
+<option id="gnu.c.compiler.option.preprocessor.def.symbols.362140976" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" valueType="definedSymbols">
+<listOptionValue builtIn="false" value="__X86__"/>
 </option>
 <inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1023083955" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 </tool>
