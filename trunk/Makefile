@@ -6,7 +6,7 @@ OBJDIR   := .obj
 SRCDIR   := src
 TARGET   := mfsparser
 
-DEFINES  += -D__DEBUG__
+DEFINES  += -D__X86__
 CFLAGS   := -ggdb -O0 -g3 -Wall -I$(PWD)/include
 LDFLAGS  := 
 

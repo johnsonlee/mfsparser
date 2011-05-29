@@ -215,12 +215,13 @@ size_t stream_reads(ByteStream *stream, void *dest, size_t size)
                 memcpy(buf + total, bs->data + bs->offset, bytes);
             }
 #ifdef __DEBUG__
-            info("\n*************************************************\n");
+            info("\n********************************* Reading Data *********************************\n");
             register int i;
             for (i = 0; i < bytes; i++) {
-                info("%x ", bs->data[bs->offset + i]);
+                info("%02X", bs->data[bs->offset + i]);
+                info("%c", (i + 1) % 27 ? ' ' : '\n');
             }
-            info("\n*************************************************\n");
+            info("\n********************************************************************************\n\n");
 #endif
             bs->offset += bytes;
             total += bytes;
@@ -245,16 +246,18 @@ size_t stream_unreads(ByteStream *stream, size_t size)
 void stream_trace(ByteStream *stream) {
     ByteStream *buf;
 
-    info(">>>>>>>>>>>>>>>> ByteStream Trace >>>>>>>>>>>>>>>>\n");
+    info("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Stream Trace >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
     for (buf = stream; buf; buf = buf->next) {
-        info("%p<=[%p]{%p|%d,%d}=>%p\n", buf->prev, buf, buf->data, buf->offset, buf->size, buf->next);
+        info("%p <= [%p]{%p|%d,%d} => %p\n", buf->prev, buf, buf->data, buf->offset, buf->size, buf->next);
     }
-    info("<<<<<<<<<<<<<<<< ByteStream Trace <<<<<<<<<<<<<<<<\n");
+    info("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n\n");
 }
 
 void stream_free(ByteStream **stream)
 {
     ByteStream *bs;
+
+    stream_trace(*stream);
 
     for (bs = (*stream)->next; bs; bs = (*stream)->next) {
         (*stream)->next = bs->next;
