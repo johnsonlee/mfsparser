@@ -32,7 +32,13 @@ struct MFSParserVisitor
 extern "C" {
 #endif
 
-extern void parse_mux_frame(MFSParser *parser, MFSParserVisitor *visitor);
+extern MFSParser* mfsparser_new(void);
+
+extern MuxFrameHeader* parse_mux_frame_header(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor);
+
+extern void mfsparser_parse(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor);
+
+extern void mfsparser_free(MFSParser **parser);
 
 #ifdef __cplusplus
 }
