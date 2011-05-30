@@ -3,6 +3,10 @@
 #ifndef __MFS_PARSER_H__
 #define __MFS_PARSER_H__
 
+#ifndef BUF_SIZE
+#define BUF_SIZE                80960
+#endif
+
 typedef enum MFSParserState     MFSParserState;     // 解析器状态
 typedef struct MFSParser        MFSParser;          // MFS解析器
 typedef struct MFSParserVisitor MFSParserVisitor;   // MFS解析器访问器
@@ -32,9 +36,23 @@ struct MFSParserVisitor
 extern "C" {
 #endif
 
+INLINE int mfsparser_find_header(unsigned char *data, int length)
+{
+    register int i = 0;
+    static const unsigned char start_code[] = { 0, 0, 0, 1 };
+
+    for (i = 0; i < length - 4; i++) {
+        if (!memcmp(data, start_code, 4)) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
 extern MFSParser* mfsparser_new(void);
 
-extern MuxFrameHeader* parse_mux_frame_header(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor);
+extern MuxFrameHeader* mfsparser_parse_header(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor);
 
 extern void mfsparser_parse(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor);
 
