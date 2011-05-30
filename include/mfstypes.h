@@ -6,6 +6,19 @@
 #ifndef __MFS_TYPES_H__
 #define __MFS_TYPES_H__
 
+#undef  INLINE
+#ifdef __cpluscplus
+#define INLINE inline
+#else
+#define INLINE static
+#endif
+
+#undef  MIN
+#define MIN(a, b) ((a) > (b) ? (b) : (a));
+
+#undef  MAX
+#define MAX(a, b) ((a) > (b) ? (a) : (b));
+
 typedef enum CtrlInfoTableID         CtrlInfoTableID;     // 控制信息表ID
 typedef enum RSCodeRate              RSCodeRate;          // RS码率
 typedef enum ByteInterleavedMode     ByteInterleavedMode; // RS码率
@@ -277,10 +290,10 @@ struct XSCT
     uint32_t seg_length                   : 16;
     uint32_t seg_index                    : 8;
 
-    uint32_t seg_count                   : 8;
+    uint32_t seg_count                    : 8;
     uint32_t                              : 4;
     uint32_t update_index                 : 4;
-    uint32_t service_count               : 16;
+    uint32_t service_count                : 16;
 
     Service **services;
 };
@@ -391,7 +404,8 @@ struct MuxSubFrameHeader
 {
     uint32_t length                       : 8;
 
-    uint32_t                              : 3;
+    uint32_t pkg_mode_flag                : 1;
+    uint32_t encryption_flag              : 2;
     uint32_t ext_flag                     : 1;
     uint32_t data_section_flag            : 1;
     uint32_t audio_section_flag           : 1;
@@ -419,7 +433,7 @@ struct VideoSection
 
 struct AudioSection
 {
-    uint8_t unit_count                   : 8;
+    uint8_t unit_count                    : 8;
 
     AudioUnitParam **unit_params;
     uint8_t *data;
@@ -427,7 +441,7 @@ struct AudioSection
 
 struct DataSection
 {
-    uint8_t unit_count                   : 8;
+    uint8_t unit_count                    : 8;
 
     DataUnitParam **unit_params;
     uint8_t *data;
@@ -437,13 +451,13 @@ struct DataSection
 extern "C" {
 #endif
 
-extern void mux_frame_header_free(MuxFrameHeader**);
-extern void nit_free(NIT**);
-extern void xmct_free(XMCT**);
-extern void xsct_free(XSCT**);
-extern void esgbdt_free(ESGBDT**);
-extern void eb_free(EB**);
-extern void mux_sub_frame_free(MuxSubFrame**);
+extern void mux_frame_header_free(MuxFrameHeader **mfh);
+extern void nit_free(NIT **nit);
+extern void xmct_free(XMCT **xmct);
+extern void xsct_free(XSCT **xsct);
+extern void esgbdt_free(ESGBDT **esgbdt);
+extern void eb_free(EB **eb);
+extern void mux_sub_frame_free(MuxSubFrame **msf);
 
 #ifdef __cplusplus
 }

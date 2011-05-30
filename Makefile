@@ -14,6 +14,7 @@ SOURCES  := $(SRCDIR)/bytestream.c \
             $(SRCDIR)/crc.c        \
             $(SRCDIR)/mfsparser.c  \
             $(SRCDIR)/stack.c      \
+            $(SRCDIR)/main.c       \
             $(SRCDIR)/mfstypes.c
 
 OBJECTS  := $(patsubst %.c, $(OBJDIR)/%.o, $(notdir $(SOURCES)))

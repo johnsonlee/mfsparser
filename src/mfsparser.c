@@ -10,15 +10,27 @@
 #undef  __LOG_TAG__
 #define __LOG_TAG__         "MFSParser"
 
-#define BUF_SIZE            80960
-
 #define START_CODE          0x00000001
 
+#ifndef DAT_FILE_DIR
 #define DAT_FILE_DIR        ".cmmb"
+#endif
+
+#ifndef DAT_FILE_ESGBDT
 #define DAT_FILE_ESGBDT     DAT_FILE_DIR"/ESGBDT.dat"
-#define DAT_FILE_TS0        DAT_FILE_DIR"/TS0.dat"
-#define DAT_FILE_MFS_ESG    DAT_FILE_DIR"/MFS-ESG.dat"
+#endif
+
+#ifndef DAT_FILE_MFS_TS0
+#define DAT_FILE_MFS_TS0    DAT_FILE_DIR"/TS0.dat"
+#endif
+
+#ifndef DAT_FILE_MFS_254
+#define DAT_FILE_MFS_254    DAT_FILE_DIR"/MFS-254.dat"
+#endif
+
+#ifndef DAT_FILE_ESG
 #define DAT_FILE_ESG        DAT_FILE_DIR"/ESG.dat"
+#endif
 
 #define PARSE_END_IF(exp) if (exp) goto __PARSE_END__
 
@@ -34,7 +46,27 @@ struct MFSParser
     SSCT             *ssct;         // 短时间业务配置表
 };
 
-static int locate_mux_frame_header(ByteStream *stream)
+INLINE void write_data(char *path, ByteStream *stream, size_t size)
+{
+    int fd = open(path, O_WRONLY | O_CREAT);
+    if (-1 == fd) {
+        error("open file %s failed\n", path);
+        return;
+    }
+
+    size_t bytes;
+    unsigned char data[BUF_SIZE];
+    while (size > 0) {
+        bytes = MIN(size, BUF_SIZE);
+        bytes = stream_reads(stream, data, bytes);
+        write(fd, data, bytes);
+        size -= BUF_SIZE;
+    }
+
+    close(fd);
+}
+
+INLINE int locate_mux_frame_header(ByteStream *stream)
 {
     uint8_t ui8;
     uint32_t ui32;
@@ -60,7 +92,7 @@ static int locate_mux_frame_header(ByteStream *stream)
     return -1;
 }
 
-static NIT* parse_NIT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+INLINE NIT* parse_NIT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
 {
     register int i;
     uint8_t ui8;
@@ -183,7 +215,7 @@ static NIT* parse_NIT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *v
     return nit;
 }
 
-static XMCT* parse_XMCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+INLINE XMCT* parse_XMCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
 {
     register int i, j;
 
@@ -283,7 +315,7 @@ static XMCT* parse_XMCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor 
     return xmct;
 }
 
-static XSCT* parse_XSCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+INLINE XSCT* parse_XSCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
 {
     register int i;
 
@@ -346,12 +378,12 @@ static XSCT* parse_XSCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor 
     return xsct;
 }
 
-static ESGBDT* parse_ESGBDT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+INLINE ESGBDT* parse_ESGBDT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
 {
     ESGBDT *esgbdt = malloc(sizeof(ESGBDT));
     size_t frm_size = parser->mf_header->sub_frame_lengths[parser->msf_index];
 
-#if 0
+#if 1
     char esg_dat[512];
     unsigned char *buf = malloc(sizeof(unsigned char) * frm_size);
 
@@ -372,7 +404,7 @@ static ESGBDT* parse_ESGBDT(MFSParser *parser, ByteStream *stream, MFSParserVisi
     return esgbdt;
 }
 
-static EB* parse_EB(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+INLINE EB* parse_EB(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
 {
     uint8_t ui8;
     uint16_t ui16;
@@ -409,335 +441,24 @@ static EB* parse_EB(MFSParser *parser, ByteStream *stream, MFSParserVisitor *vis
     return eb;
 }
 
+INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+{
+    register int i, length;
+
 #if 0
-static MuxSubFrameHeader* parse_mux_sub_frame_header(MFSParser *parser, MFSParserVisitor *visitor)
-{
-    register int i, length;
-
-    uint8_t ui8;
-    uint16_t ui16;
-    uint32_t ui32;
-
-    MuxSubFrameHeader *msfh = malloc(sizeof(MuxSubFrameHeader));
-
-    ui8 = stream_read(stream);
-    msfh->length = ui8;
-    debug("MuxSubFrameHeader.length=%d\n", msfh->length);
-
-    ui8 = stream_read(stream);
-    msfh->start_play_time_flag = ui8 >> 7;
-    msfh->video_section_flag = ui8 >> 6;
-    msfh->audio_section_flag = ui8 >> 5;
-    msfh->data_section_flag = ui8 >> 4;
-    msfh->ext_flag = ui8 >> 3;
-    debug("MuxSubFrameHeader.start_play_time_flag=0x%x\n", msfh->start_play_time_flag);
-    debug("MuxSubFrameHeader.video_section_flag=0x%x\n", msfh->video_section_flag);
-    debug("MuxSubFrameHeader.audio_section_flag=0x%x\n", msfh->audio_section_flag);
-    debug("MuxSubFrameHeader.data_section_flag=0x%x\n", msfh->data_section_flag);
-    debug("MuxSubFrameHeader.ext_flag=0x%x\n", msfh->ext_flag);
-
-    // 起始播放时间
-    if (msfh->start_play_time_flag) {
-        stream_read_uint32(stream, &ui32);
-        msfh->start_play_time = ui32;
-    } else {
-        msfh->start_play_time = 0;
+    size_t frm_size = parser->mf_header->sub_frame_lengths[parser->msf_index];
+    char path[255];
+    sprintf(path, "%s/"DAT_FILE_DIR"/MSF.dat", getenv("HOME"));
+    int fd = open(path, O_CREAT | O_WRONLY);
+    if (-1 != fd) {
+        unsigned char *data = malloc(sizeof(unsigned char) * frm_size);
+        stream_reads(stream, data, frm_size);
+        stream_unreads(stream, frm_size);
+        write(fd, data, frm_size);
+        close(fd);
+        free(data);
     }
-    debug("MuxSubFrameHeader.start_play_time=0x%x\n", msfh->start_play_time);
-
-    // 音视频/数据段大小
-    int flags[] = {
-            msfh->video_section_flag,
-            msfh->audio_section_flag,
-            msfh->data_section_flag
-    };
-    SectionSize **sizes[] = {
-            &msfh->video_section_size,
-            &msfh->audio_section_size,
-            &msfh->data_section_size
-    };
-
-    for (i = 0; i < 3; i++) {
-        if (flags[i]) {
-            SectionSize *ss = malloc(sizeof(SectionSize));
-
-            stream_read_uint24(stream, &ui32);
-            ss->length = ui32 >> 3;
-            ss->stream_count = ui32;
-            debug("SectionSize.length=%d\n", ss->length);
-            debug("SectionSize.stream_count=0x%x\n", ss->stream_count);
-
-            *sizes[i] = ss;
-        } else {
-            *sizes[i] = NULL;
-        }
-    }
-
-    // 扩展区
-    if (msfh->ext_flag) {
-        length = msfh->video_section_size->length;
-        msfh->video_stream_params = malloc(sizeof(void*) * length);
-        for (i = 0; i < length; i++) {
-            VideoStreamParam *vsp = malloc(sizeof(VideoStreamParam));
-
-            ui8 = stream_read(stream);
-            vsp->algorithm_type = ui8 >> 5;
-            vsp->code_rate_flag = ui8 >> 4;
-            vsp->display_flag = ui8 >> 3;
-            vsp->resolution_flag = ui8 >> 2;
-            vsp->frame_freq_flag = ui8 >> 1;
-            debug("VideoStreamParam.algorithm_type=0x%x\n", vsp->algorithm_type);
-            debug("VideoStreamParam.code_rate_flag=0x%x\n", vsp->code_rate_flag);
-            debug("VideoStreamParam.display_flag=0x%x\n", vsp->display_flag);
-            debug("VideoStreamParam.resolution_flag=0x%x\n", vsp->resolution_flag);
-            debug("VideoStreamParam.frame_freq_flag=0x%x\n", vsp->frame_freq_flag);
-
-            // 视频码率
-            if (vsp->code_rate_flag) {
-                stream_read_uint16(stream, &ui16);
-                vsp->code_rate = ui16;
-            } else {
-                vsp->code_rate = 0;
-            }
-            debug("VideoStreamParam.code_rate=0x%x\n", vsp->code_rate);
-
-            // 图像显示
-            if (vsp->display_flag) {
-                vsp->display_param = malloc(sizeof(DisplayParam));
-
-                stream_read_uint16(stream, &ui16);
-                vsp->display_param->x = ui16 >> 10;
-                vsp->display_param->y = ui16 >> 4;
-                vsp->display_param->piority = ui16 >> 1;
-                debug("DisplayParam.x=%d\n", vsp->display_param->x);
-                debug("DisplayParam.y=%d\n", vsp->display_param->y);
-                debug("DisplayParam.piority=0x%x\n", vsp->display_param->piority);
-            } else {
-                vsp->display_param = NULL;
-            }
-
-            // 分辨率
-            if (vsp->resolution_flag) {
-                vsp->resolution_param = malloc(sizeof(ResolutionParam));
-
-                stream_read_uint24(stream, &ui32);
-                vsp->resolution_param->width = ui32 >> 10;
-                vsp->resolution_param->height = ui32;
-                debug("ResolutionParam.width=0x%x\n", vsp->resolution_param->width);
-                debug("ResolutionParam.height=0x%x\n", vsp->resolution_param->height);
-            } else {
-                vsp->resolution_param = NULL;
-            }
-
-            // 帧频
-            if (vsp->frame_freq_flag) {
-                ui8 = stream_read(stream);
-                vsp->frame_freq = ui8 >> 4;
-            } else {
-                vsp->frame_freq = 0;
-            }
-            debug("VideoStreamParam.frame_freq=%d\n", vsp->frame_freq);
-
-            msfh->video_stream_params[i] = vsp;
-        }
-
-        length = msfh->audio_section_size->length;
-        msfh->audio_stream_params = malloc(sizeof(void*) * length);
-        for (i = 0; i < length; i++) {
-            AudioStreamParam *asp = malloc(sizeof(AudioStreamParam));
-
-            ui8 = stream_read(stream);
-            asp->algorithm_type = ui8 >> 4;
-            asp->code_rate_flag = ui8 >> 3;
-            asp->sample_rate_flag = ui8 >> 2;
-            asp->desc_flag = ui8 >> 1;
-            debug("AudioStreamParam.algorithm_type=0x%x\n", asp->algorithm_type);
-            debug("AudioStreamParam.code_rate_flag=0x%x\n", asp->code_rate_flag);
-            debug("AudioStreamParam.sample_rate_flag=0x%x\n", asp->sample_rate_flag);
-            debug("AudioStreamParam.desc_flag=0x%x\n", asp->desc_flag);
-
-            // 音频码率
-            if (asp->code_rate_flag) {
-                stream_read_uint16(stream, &ui16);
-                asp->code_rate = ui16 >> 2;
-            } else {
-                asp->code_rate = 0;
-            }
-            debug("AudioStreamParam.code_rate=0x%x\n", asp->code_rate);
-
-            // 音频采样率
-            if (asp->sample_rate_flag) {
-                ui8 = stream_read(stream);
-                asp->sample_rate = ui8;
-            } else {
-                asp->sample_rate = 0;
-            }
-            debug("AudioStreamParam.sample_rate=0x%x\n", asp->sample_rate);
-
-            // 音频流描述
-            if (asp->desc_flag) {
-                stream_read_uint24(stream, &ui32);
-                asp->desc = ui32;
-            } else {
-                asp->desc = 0;
-            }
-            debug("AudioStreamParam.desc=0x%x\n", asp->desc);
-
-            msfh->audio_stream_params[i] = asp;
-        }
-    } else {
-        msfh->video_stream_params = NULL;
-        msfh->audio_stream_params = NULL;
-    }
-
-    // CRC
-    stream_read_uint32(stream, &ui32);
-
-    return msfh;
-}
-
-static VideoSection* parse_video_section(MFSParser *parser, MFSParserVisitor *visitor, int *len)
-{
-    register int i, n;
-
-    uint8_t ui8;
-    uint16_t ui16;
-    uint32_t ui32;
-
-    VideoSection *vs = malloc(sizeof(VideoSection));
-
-    stream_read_uint16(stream, &ui16);
-    vs->header_length = ui16;
-    debug("VideoSection.header_length=%d\n", vs->header_length);
-
-    for (i = 0, n = 0; i < vs->header_length - 2; n++) {
-        stream_read_uint24(stream, &ui32);
-        if (0x00800000 == (ui32 & 0x00800000)) {
-            stream_read_uint16(stream, &ui16);
-            i += 2;
-        }
-        i += 3;
-    }
-    *len = n;
-    stream_unreads(stream, vs->header_length);
-
-    // 视频单元参数
-    vs->unit_params = malloc(sizeof(void*) * n);
-    for (i = 0; i < n; i++) {
-        VideoUnitParam *vup = malloc(sizeof(VideoUnitParam));
-
-        stream_read_uint16(stream, &ui16);
-        vup->length = ui16;
-        debug("VideoUnitParam.length=%d\n", vup->length);
-
-        ui8 = stream_read(stream);
-        vup->frame_type = ui8 >> 5;
-        vup->stream_index = ui8 >> 2;
-        vup->frame_end_flag = ui8 >> 1;
-        vup->play_time_flag = ui8;
-
-        debug("VideoUnitParam.frame_type=0x%x\n", vup->frame_type);
-        debug("VideoUnitParam.stream_index=%d\n", vup->stream_index);
-        debug("VideoUnitParam.frame_end_flag=0x%x\n", vup->frame_end_flag);
-        debug("VideoUnitParam.play_time_flag=0x%x\n", vup->play_time_flag);
-
-        vs->unit_params[i] = vup;
-    }
-
-    // CRC
-    stream_read_uint32(stream, &ui32);
-
-    // 数据单元
-
-    return vs;
-}
-
-static AudioSection* parse_audio_section(MFSParser *parser, MFSParserVisitor *visitor)
-{
-    register int i;
-
-    uint8_t ui8;
-    uint16_t ui16;
-    uint32_t ui32;
-
-    AudioSection *as = malloc(sizeof(AudioSection));
-
-    ui8 = stream_read(stream);
-    as->unit_count = ui8;
-    debug("AudioSection.unit_count=%d\n", as->unit_count);
-
-    as->unit_params = malloc(sizeof(void*) * as->unit_count);
-    for (i = 0; i < as->unit_count; i++) {
-        AudioUnitParam *aup = malloc(sizeof(AudioUnitParam));
-
-        stream_read_uint16(stream, &ui16);
-        aup->length = ui16;
-        debug("AudioUnitParam.length=%d\n", aup->length);
-
-        ui8 = stream_read(stream);
-        aup->stream_index = ui8 >> 5;
-        debug("AudioUnitParam.stream_index=%d\n", aup->stream_index);
-
-        stream_read_uint16(stream, &ui16);
-        aup->play_time = ui16;
-        debug("AudioUnitParam.play_time=%d\n", aup->play_time);
-
-        as->unit_params[i] = aup;
-    }
-
-    // CRC
-    stream_read_uint32(stream, &ui32);
-
-    // 数据单元
-
-    return as;
-}
-
-static DataSection* parse_data_section(MFSParser *parser, MFSParserVisitor *visitor)
-{
-    register int i;
-    uint8_t ui8;
-    uint16_t ui16;
-    uint32_t ui32;
-    size_t bytes = 1;
-
-    DataSection *ds = malloc(sizeof(DataSection));
-
-    ui8 = stream_read(stream);
-    ds->unit_count = ui8;
-    debug("DataSection.unit_count=%d\n", ds->unit_count);
-
-    ds->unit_params = malloc(sizeof(void*) * ds->unit_count);
-    for (i = 0; i < ds->unit_count; i++) {
-        DataUnitParam *dup = malloc(sizeof(DataUnitParam));
-
-        ui8 = stream_read(stream);
-        dup->type = ui8;
-        debug("DataUnitParam.type=0x%x\n", dup->type);
-
-        stream_read_uint16(stream, &ui16);
-        dup->length = ui16;
-        debug("DataUnitParam.length=%d\n", dup->length);
-
-        bytes += 3;
-
-        ds->unit_params[i] = dup;
-    }
-
-    // CRC
-    stream_read_uint32(stream, &ui32);
-
-    bytes += 4;
-
-    // 数据单元
-
-    return ds;
-}
 #endif
-
-static MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
-{
-    register int i, length;
 
     uint8_t ui8;
     uint16_t ui16;
@@ -773,6 +494,8 @@ static MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, M
     msfh->audio_section_flag = ui8 >> 5;
     msfh->data_section_flag = ui8 >> 4;
     msfh->ext_flag = ui8 >> 3;
+    msfh->encryption_flag = ui8 >> 1;
+    msfh->pkg_mode_flag = ui8;
     bytes += 1;
     debug("MuxSubFrameHeader.start_play_time_flag=0x%x\n", msfh->start_play_time_flag);
     debug("MuxSubFrameHeader.video_section_flag=0x%x\n", msfh->video_section_flag);
@@ -1091,6 +814,11 @@ static MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, M
     if (msf->header->data_section_flag) {
         DataSection *ds = malloc(sizeof(DataSection));
 
+#if 0
+        write_data("/home/johnson/"DAT_FILE_ESG, stream, BUF_SIZE);
+        exit(0);
+#endif
+
         ui8 = stream_read(stream);
         ds->unit_count = ui8;
         bytes += 1;
@@ -1149,7 +877,7 @@ MFSParser* mfsparser_new(void)
     return parser;
 }
 
-MuxFrameHeader* parse_mux_frame_header(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+MuxFrameHeader* mfsparser_parse_header(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
 {
     register int i;
     uint8_t ui8;
@@ -1253,7 +981,7 @@ __PARSE_BEGIN__:
             mux_frame_header_free(&parser->mf_header);
         }
 
-        if (NULL == (parser->mf_header = parse_mux_frame_header(parser, stream, visitor)))
+        if (NULL == (parser->mf_header = mfsparser_parse_header(parser, stream, visitor)))
             return;
 
         parser->msf_index = 0;
@@ -1401,153 +1129,4 @@ void mfsparser_free(MFSParser **parser)
 
     free(*parser);
     *parser = NULL;
-}
-
-static void* visit_NIT(NIT *nit, void *obj)
-{
-    debug("\n");
-    return obj;
-}
-
-static void* visit_CMCT(CMCT *cmct, void *obj)
-{
-    debug("\n");
-    return obj;
-}
-
-static void* visit_SMCT(SMCT *smct, void *obj)
-{
-    debug("\n");
-    return obj;
-}
-
-static void* visit_CSCT(CSCT *csct, void *obj)
-{
-    debug("\n");
-    return obj;
-}
-
-static void* visit_SSCT(SSCT *ssct, void *obj)
-{
-    debug("\n");
-    return obj;
-}
-
-static void* visit_ESGBDT(ESGBDT *esgbdt, void *obj)
-{
-    debug("\n");
-    return obj;
-}
-
-static void* visit_EB(EB *eb, void *obj)
-{
-    debug("\n");
-    return obj;
-}
-
-static void* visit_video_section(MuxSubFrameHeader *msfh, VideoSection *vs, void *obj)
-{
-    debug("\n");
-    return obj;
-}
-
-static void* visit_audio_section(MuxSubFrameHeader *msfh, AudioSection *as, void *obj)
-{
-    debug("\n");
-    return obj;
-}
-
-static void* visit_data_section(MuxSubFrameHeader *msfh, DataSection *ds, void *obj)
-{
-    debug("\n");
-
-#if 1
-    register int i, n, offset;
-    char path[255];
-
-    for (i = offset = 0; i < ds->unit_count; i++) {
-        switch (ds->unit_params[i]->type) {
-            case DATA_UNIT_TYPE_ESG:
-                sprintf(path, "%s/"DAT_FILE_DIR"/ESG-%d.dat", getenv("HOME"), i);
-                int fd = open(path, O_CREAT | O_WRONLY | O_APPEND);
-                if (-1 == fd)
-                    return obj;
-
-                n = write(fd, ds->data + offset, ds->unit_params[i]->length);
-                debug("write bytes %d to file\n", n);
-                close(fd);
-                break;
-            default:
-                break;
-        }
-        offset += ds->unit_params[i]->length;
-    }
-
-#endif
-
-    return obj;
-}
-
-static MFSParserVisitor visitor = {
-    visit_NIT,
-    visit_CMCT,
-    visit_SMCT,
-    visit_CSCT,
-    visit_SSCT,
-    visit_ESGBDT,
-    visit_EB,
-    visit_video_section,
-    visit_audio_section,
-    visit_data_section
-};
-
-static void usage(void)
-{
-    info("\n");
-    info("******************************** MFS Parser Usage ******************************\n");
-    info("\n");
-    info("mfsparser <file> [buffer size]\n\n");
-    info("\n");
-    info("********************************************************************************\n");
-}
-
-int main(int argc, char **argv)
-{
-    if (argc < 2) {
-        error("\ntoo few args\n");
-        usage();
-        exit(0);
-    }
-
-    unsigned char *buf;
-    char *path = argv[1];
-    long int buf_size = BUF_SIZE;
-    int fd_dat = open(argv[1], O_RDONLY);
-
-    if (argc > 2) {
-        buf_size = atol(argv[2]);
-    }
-    info("buffer size:%ld\n", buf_size);
-
-    if (-1 == fd_dat) {
-        error("open file %s failed!\n", path);
-        exit(0);
-    }
-
-    buf = malloc(buf_size);
-    ByteStream *stream = stream_new();
-    MFSParser *parser = mfsparser_new();
-
-    while (0 < read(fd_dat, buf, buf_size)) {
-        stream_write(stream, buf, buf_size);
-        mfsparser_parse(parser, stream, &visitor);
-    }
-
-    mfsparser_free(&parser);
-    stream_free(&stream);
-
-    close(fd_dat);
-    free(buf);
-
-    return 0;
 }
