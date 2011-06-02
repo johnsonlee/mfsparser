@@ -1,11 +1,8 @@
 #include <log.h>
 #include <bytestream.h>
 
-#undef  MIN
-#define MIN(a, b) ((a) > (b) ? (b) : (a));
-
-#undef  MAX
-#define MAX(a, b) ((a) > (b) ? (a) : (b));
+#undef  __LOG_TAG__
+#define __LOG_TAG__ "ByteStream"
 
 struct ByteStream
 {
@@ -19,7 +16,6 @@ struct ByteStream
 static void stream_cleanup(ByteStream *stream)
 {
     ByteStream *bs;
-
 
     for (bs = stream->next; bs && bs->size <= bs->offset; bs = stream->next) {
         stream_trace(stream);
@@ -59,12 +55,12 @@ ByteStream* stream_new()
     return stream;
 }
 
-size_t stream_get_size(ByteStream *bs)
+size_t stream_get_size(ByteStream *stream)
 {
     size_t size = 0;
     ByteStream *buf;
 
-    for (buf = bs->next; buf; buf = buf->next) {
+    for (buf = stream->next; buf; buf = buf->next) {
         size += buf->size - buf->offset;
     }
 
@@ -244,13 +240,15 @@ size_t stream_unreads(ByteStream *stream, size_t size)
 }
 
 void stream_trace(ByteStream *stream) {
+#ifdef __DEBUG__
     ByteStream *buf;
 
-    info("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Stream Trace >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
+    debug("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Stream Trace >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
     for (buf = stream; buf; buf = buf->next) {
-        info("%p <= [%p]{%p|%d,%d} => %p\n", buf->prev, buf, buf->data, buf->offset, buf->size, buf->next);
+        debug("%p <= [%p]{%p|%d,%d} => %p\n", buf->prev, buf, buf->data, buf->offset, buf->size, buf->next);
     }
-    info("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n\n");
+    debug("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n\n");
+#endif
 }
 
 void stream_free(ByteStream **stream)
