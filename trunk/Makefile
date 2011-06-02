@@ -19,13 +19,13 @@ SOURCES  := $(SRCDIR)/bytestream.c \
 
 OBJECTS  := $(patsubst %.c, $(OBJDIR)/%.o, $(notdir $(SOURCES)))
 
-all: $(TARGET)
-
-run: clean all
-	./$(TARGET)
+all: mfsparser libmfs.so
 
 $(TARGET): $(OBJECTS)
 	$(CC) $(LDFLAGS) $^ -o $@
+
+libmfs.so: $(filter-out $(OBJDIR)/main.o, $(OBJECTS))
+	$(CC) $(LDFLAGS) -shared $^ -o $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	@mkdir -p $(OBJDIR)
