@@ -12,27 +12,7 @@
 
 #define START_CODE          0x00000001
 
-#ifndef DAT_FILE_DIR
-#define DAT_FILE_DIR        ".cmmb"
-#endif
-
-#ifndef DAT_FILE_ESGBDT
-#define DAT_FILE_ESGBDT     DAT_FILE_DIR"/ESGBDT.dat"
-#endif
-
-#ifndef DAT_FILE_MFS_TS0
-#define DAT_FILE_MFS_TS0    DAT_FILE_DIR"/TS0.dat"
-#endif
-
-#ifndef DAT_FILE_MFS_254
-#define DAT_FILE_MFS_254    DAT_FILE_DIR"/MFS-254.dat"
-#endif
-
-#ifndef DAT_FILE_ESG
-#define DAT_FILE_ESG        DAT_FILE_DIR"/ESG.dat"
-#endif
-
-#define PARSE_END_IF(exp) if (exp) goto __PARSE_END__
+#define PARSE_NEXT_IF(exp) if (exp) goto __PARSE_BEGIN__
 
 struct MFSParser
 {
@@ -45,26 +25,6 @@ struct MFSParser
     CSCT             *csct;         // 持续时间业务配置表
     SSCT             *ssct;         // 短时间业务配置表
 };
-
-INLINE void write_data(char *path, ByteStream *stream, size_t size)
-{
-    int fd = open(path, O_WRONLY | O_CREAT);
-    if (-1 == fd) {
-        error("open file %s failed\n", path);
-        return;
-    }
-
-    size_t bytes;
-    unsigned char data[BUF_SIZE];
-    while (size > 0) {
-        bytes = MIN(size, BUF_SIZE);
-        bytes = stream_reads(stream, data, bytes);
-        write(fd, data, bytes);
-        size -= BUF_SIZE;
-    }
-
-    close(fd);
-}
 
 INLINE int locate_mux_frame_header(ByteStream *stream)
 {
@@ -87,12 +47,19 @@ INLINE int locate_mux_frame_header(ByteStream *stream)
 
         stream_read_uint32(stream, &ui32);
         error("CRC error!\n");
+        break;
     };
 
     return -1;
 }
 
-INLINE NIT* parse_NIT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+INLINE void skip_current_sub_frame(MFSParser *parser, ByteStream *stream)
+{
+    size_t frm_size = parser->mf_header->sub_frame_lengths[parser->msf_index];
+    stream_reads(stream, NULL, frm_size);
+}
+
+INLINE NIT* parse_NIT(MFSParser *parser, ByteStream *stream)
 {
     register int i;
     uint8_t ui8;
@@ -100,15 +67,15 @@ INLINE NIT* parse_NIT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *v
     uint32_t ui32;
     size_t bytes = 13;
 
-    NIT *nit = malloc(sizeof(NIT));
+    NIT *nit = nit_new();
 
     ui8 = stream_read(stream);
     nit->id = ui8;
     debug("NIT.id=0x%x\n", nit->id);
 
     ui8 = stream_read(stream);
-    nit->NIT_update_index = ui8 >> 4;
-    debug("NIT.NIT_update_index=%d\n", nit->NIT_update_index);
+    nit->update_index = ui8 >> 4;
+    debug("NIT.update_index=%d\n", nit->update_index);
 
     stream_read_uint16(stream, &ui16);
     nit->MJD = ui16;
@@ -155,7 +122,7 @@ INLINE NIT* parse_NIT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *v
 
     nit->other_freq_points = malloc(sizeof(void*) * nit->other_freq_point_count);
     for (i = 0; i < nit->other_freq_point_count; i++) {
-        FreqPoint *fp = malloc(sizeof(FreqPoint));
+        FreqPoint *fp = freq_point_new();
 
         ui8 = stream_read(stream);
         fp->index = ui8;
@@ -182,7 +149,7 @@ INLINE NIT* parse_NIT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *v
 
     nit->adjacent_nets = malloc(sizeof(void*) * nit->adjacent_net_count);
     for (i = 0; i < nit->adjacent_net_count; i++) {
-        AdjacentNet *an = malloc(sizeof(AdjacentNet));
+        AdjacentNet *an = adjacent_net_new();
 
         stream_read_uint16(stream, &ui16);
         an->level = ui16 >> 12;
@@ -215,7 +182,7 @@ INLINE NIT* parse_NIT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *v
     return nit;
 }
 
-INLINE XMCT* parse_XMCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+INLINE XMCT* parse_XMCT(MFSParser *parser, ByteStream *stream)
 {
     register int i, j;
 
@@ -224,7 +191,7 @@ INLINE XMCT* parse_XMCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor 
     uint32_t ui32;
     size_t bytes = 4;
 
-    XMCT *xmct = malloc(sizeof(XMCT));
+    XMCT *xmct = xmct_new();
 
     ui8 = stream_read(stream);
     xmct->id = ui8;
@@ -243,7 +210,7 @@ INLINE XMCT* parse_XMCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor 
     // 复用帧参数
     xmct->mux_frame_params = malloc(sizeof(void*) * xmct->mux_frame_count);
     for (i = 0; i < xmct->mux_frame_count; i++) {
-        MuxFrameParam *mfp = malloc(sizeof(MuxFrameParam));
+        MuxFrameParam *mfp = mux_frame_param_new();
 
         ui8 = stream_read(stream);
         mfp->id = ui8 >> 2;
@@ -269,7 +236,7 @@ INLINE XMCT* parse_XMCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor 
         // 时隙
         mfp->time_slots = malloc(sizeof(void*) * mfp->time_slot_count);
         for (j = 0; j < mfp->time_slot_count; j++) {
-            TimeSlot *ts = malloc(sizeof(TimeSlot));
+            TimeSlot *ts = time_slot_new();
 
             ui8 = stream_read(stream);
             ts->index = ui8 >> 2;
@@ -288,11 +255,11 @@ INLINE XMCT* parse_XMCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor 
 
         mfp->sub_frame_params = malloc(sizeof(void*) * mfp->sub_frame_count);
         for (j = 0; j < mfp->sub_frame_count; j++) {
-            MuxSubFrameParam *msfp = malloc(sizeof(MuxSubFrameParam));
+            MuxSubFrameParam *msfp = mux_sub_frame_param_new();
 
             ui8 = stream_read(stream);
-            msfp->sub_frame_id = ui8 >> 4;
-            debug("MuxSubFrameParam[%d].sub_frame_id=0x%x\n", j, msfp->sub_frame_id);
+            msfp->index = ui8 >> 4;
+            debug("MuxSubFrameParam[%d].index=0x%x\n", j, msfp->index);
 
             stream_read_uint16(stream, &ui16);
             msfp->service_id = ui16;
@@ -315,7 +282,7 @@ INLINE XMCT* parse_XMCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor 
     return xmct;
 }
 
-INLINE XSCT* parse_XSCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+INLINE XSCT* parse_XSCT(MFSParser *parser, ByteStream *stream)
 {
     register int i;
 
@@ -325,7 +292,7 @@ INLINE XSCT* parse_XSCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor 
     uint32_t ui32;
     size_t bytes = 8;
 
-    XSCT *xsct = malloc(sizeof(XSCT));
+    XSCT *xsct = xsct_new();
 
     ui8 = stream_read(stream);
     xsct->id = ui8;
@@ -354,7 +321,7 @@ INLINE XSCT* parse_XSCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor 
     // 业务
     xsct->services = malloc(sizeof(void*) * xsct->service_count);
     for (i = 0; i < xsct->service_count; i++) {
-        Service *s = malloc(sizeof(Service));
+        Service *s = service_new();
 
         stream_read_uint16(stream, &ui16);
         s->id = ui16;
@@ -378,46 +345,30 @@ INLINE XSCT* parse_XSCT(MFSParser *parser, ByteStream *stream, MFSParserVisitor 
     return xsct;
 }
 
-INLINE ESGBDT* parse_ESGBDT(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+INLINE ESGBDT* parse_ESGBDT(MFSParser *parser, ByteStream *stream)
 {
-    ESGBDT *esgbdt = malloc(sizeof(ESGBDT));
-    size_t frm_size = parser->mf_header->sub_frame_lengths[parser->msf_index];
+    ESGBDT *esgbdt = esgbdt_new();
 
-#if 1
-    char esg_dat[512];
-    unsigned char *buf = malloc(sizeof(unsigned char) * frm_size);
-
-    sprintf(esg_dat, "%s/"DAT_FILE_ESGBDT, getenv("HOME"));
-
-    stream_reads(stream, buf, frm_size);
-    int fd = open(esg_dat, O_WRONLY | O_APPEND);
-    if (-1 != fd) {
-        write(fd, buf, frm_size);
-        close(fd);
-    }
-
-    free(buf);
-#else
-    stream_reads(stream, NULL, frm_size);
-#endif
+    skip_current_sub_frame(parser, stream);
 
     return esgbdt;
 }
 
-INLINE EB* parse_EB(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+INLINE EB* parse_EB(MFSParser *parser, ByteStream *stream)
 {
     uint8_t ui8;
     uint16_t ui16;
     uint32_t ui32;
     size_t bytes = 4;
 
-    EB *eb = malloc(sizeof(EB));
+    EB *eb = eb_new();
 
     ui8 = stream_read(stream);
     eb->id = ui8;
     debug("EB.id=0x%x\n", eb->id);
 
     ui8 = stream_read(stream);
+    eb->msg_count = ui8 >> 4;
     eb->index = ui8;
     debug("EB.index=%d\n", eb->index);
 
@@ -441,24 +392,27 @@ INLINE EB* parse_EB(MFSParser *parser, ByteStream *stream, MFSParserVisitor *vis
     return eb;
 }
 
-INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+INLINE EADT* parse_EADT(MFSParser *parser, ByteStream *stream)
+{
+    EADT *eadt = eadt_new();
+
+    skip_current_sub_frame(parser, stream);
+
+    return eadt;
+}
+
+INLINE CIDT* parse_CIDT(MFSParser *parser, ByteStream *stream)
+{
+    CIDT *ci = cidt_new();
+
+    skip_current_sub_frame(parser, stream);
+
+    return ci;
+}
+
+INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream)
 {
     register int i, length;
-
-#if 0
-    size_t frm_size = parser->mf_header->sub_frame_lengths[parser->msf_index];
-    char path[255];
-    sprintf(path, "%s/"DAT_FILE_DIR"/MSF.dat", getenv("HOME"));
-    int fd = open(path, O_CREAT | O_WRONLY);
-    if (-1 != fd) {
-        unsigned char *data = malloc(sizeof(unsigned char) * frm_size);
-        stream_reads(stream, data, frm_size);
-        stream_unreads(stream, frm_size);
-        write(fd, data, frm_size);
-        close(fd);
-        free(data);
-    }
-#endif
 
     uint8_t ui8;
     uint16_t ui16;
@@ -478,10 +432,10 @@ INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, M
         return NULL;
     }
 
-    MuxSubFrame *msf = malloc(sizeof(MuxSubFrame));
+    MuxSubFrame *msf = mux_sub_frame_new();
 
     // 复用子帧头
-    MuxSubFrameHeader *msfh = malloc(sizeof(MuxSubFrameHeader));
+    MuxSubFrameHeader *msfh = mux_sub_frame_header_new();
 
     ui8 = stream_read(stream);
     msfh->length = ui8;
@@ -527,7 +481,7 @@ INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, M
 
     for (i = 0; i < 3; i++) {
         if (flags[i]) {
-            SectionSize *ss = malloc(sizeof(SectionSize));
+            SectionSize *ss = section_size_new();
 
             stream_read_uint24(stream, &ui32);
             ss->length = ui32 >> 3;
@@ -544,127 +498,130 @@ INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, M
 
     // 扩展区
     if (msfh->ext_flag) {
-
         // 视频流参数
-        length = msfh->video_section_size->stream_count;
-        msfh->video_stream_params = malloc(sizeof(void*) * length);
-        for (i = 0; i < length; i++) {
-            VideoStreamParam *vsp = malloc(sizeof(VideoStreamParam));
+        if (msfh->video_section_flag) {
+            length = msfh->video_section_size->stream_count;
+            msfh->video_stream_params = malloc(sizeof(void*) * length);
+            for (i = 0; i < length; i++) {
+                VideoStreamParam *vsp = video_stream_param_new();
 
-            ui8 = stream_read(stream);
-            vsp->algorithm_type = ui8 >> 5;
-            vsp->code_rate_flag = ui8 >> 4;
-            vsp->display_flag = ui8 >> 3;
-            vsp->resolution_flag = ui8 >> 2;
-            vsp->frame_freq_flag = ui8 >> 1;
-            bytes += 1;
-            debug("VideoStreamParam.algorithm_type=0x%x\n", vsp->algorithm_type);
-            debug("VideoStreamParam.code_rate_flag=0x%x\n", vsp->code_rate_flag);
-            debug("VideoStreamParam.display_flag=0x%x\n", vsp->display_flag);
-            debug("VideoStreamParam.resolution_flag=0x%x\n", vsp->resolution_flag);
-            debug("VideoStreamParam.frame_freq_flag=0x%x\n", vsp->frame_freq_flag);
-
-            // 视频码率
-            if (vsp->code_rate_flag) {
-                stream_read_uint16(stream, &ui16);
-                vsp->code_rate = ui16;
-                bytes += 2;
-            } else {
-                vsp->code_rate = 0;
-            }
-            debug("VideoStreamParam.code_rate=0x%x\n", vsp->code_rate);
-
-            // 图像显示
-            if (vsp->display_flag) {
-                vsp->display_param = malloc(sizeof(DisplayParam));
-
-                stream_read_uint16(stream, &ui16);
-                vsp->display_param->x = ui16 >> 10;
-                vsp->display_param->y = ui16 >> 4;
-                vsp->display_param->piority = ui16 >> 1;
-                bytes += 2;
-                debug("DisplayParam.x=%d\n", vsp->display_param->x);
-                debug("DisplayParam.y=%d\n", vsp->display_param->y);
-                debug("DisplayParam.piority=0x%x\n", vsp->display_param->piority);
-            } else {
-                vsp->display_param = NULL;
-            }
-
-            // 分辨率
-            if (vsp->resolution_flag) {
-                vsp->resolution_param = malloc(sizeof(ResolutionParam));
-
-                stream_read_uint24(stream, &ui32);
-                vsp->resolution_param->width = ui32 >> 10;
-                vsp->resolution_param->height = ui32;
-                bytes += 3;
-                debug("ResolutionParam.width=0x%x\n", vsp->resolution_param->width);
-                debug("ResolutionParam.height=0x%x\n", vsp->resolution_param->height);
-            } else {
-                vsp->resolution_param = NULL;
-            }
-
-            // 帧频
-            if (vsp->frame_freq_flag) {
                 ui8 = stream_read(stream);
-                vsp->frame_freq = ui8 >> 4;
+                vsp->algorithm_type = ui8 >> 5;
+                vsp->code_rate_flag = ui8 >> 4;
+                vsp->display_flag = ui8 >> 3;
+                vsp->resolution_flag = ui8 >> 2;
+                vsp->frame_freq_flag = ui8 >> 1;
                 bytes += 1;
-                debug("VideoStreamParam.frame_freq=%d\n", vsp->frame_freq);
-            } else {
-                vsp->frame_freq = 0;
-            }
+                debug("VideoStreamParam.algorithm_type=0x%x\n", vsp->algorithm_type);
+                debug("VideoStreamParam.code_rate_flag=0x%x\n", vsp->code_rate_flag);
+                debug("VideoStreamParam.display_flag=0x%x\n", vsp->display_flag);
+                debug("VideoStreamParam.resolution_flag=0x%x\n", vsp->resolution_flag);
+                debug("VideoStreamParam.frame_freq_flag=0x%x\n", vsp->frame_freq_flag);
 
-            msfh->video_stream_params[i] = vsp;
+                // 视频码率
+                if (vsp->code_rate_flag) {
+                    stream_read_uint16(stream, &ui16);
+                    vsp->code_rate = ui16;
+                    bytes += 2;
+                } else {
+                    vsp->code_rate = 0;
+                }
+                debug("VideoStreamParam.code_rate=0x%x\n", vsp->code_rate);
+
+                // 图像显示
+                if (vsp->display_flag) {
+                    vsp->display_param = display_param_new();
+
+                    stream_read_uint16(stream, &ui16);
+                    vsp->display_param->x = ui16 >> 10;
+                    vsp->display_param->y = ui16 >> 4;
+                    vsp->display_param->piority = ui16 >> 1;
+                    bytes += 2;
+                    debug("DisplayParam.x=%d\n", vsp->display_param->x);
+                    debug("DisplayParam.y=%d\n", vsp->display_param->y);
+                    debug("DisplayParam.piority=0x%x\n", vsp->display_param->piority);
+                } else {
+                    vsp->display_param = NULL;
+                }
+
+                // 分辨率
+                if (vsp->resolution_flag) {
+                    vsp->resolution_param = resolution_param_new();
+
+                    stream_read_uint24(stream, &ui32);
+                    vsp->resolution_param->width = ui32 >> 10;
+                    vsp->resolution_param->height = ui32;
+                    bytes += 3;
+                    debug("ResolutionParam.width=0x%x\n", vsp->resolution_param->width);
+                    debug("ResolutionParam.height=0x%x\n", vsp->resolution_param->height);
+                } else {
+                    vsp->resolution_param = NULL;
+                }
+
+                // 帧频
+                if (vsp->frame_freq_flag) {
+                    ui8 = stream_read(stream);
+                    vsp->frame_freq = ui8 >> 4;
+                    bytes += 1;
+                    debug("VideoStreamParam.frame_freq=%d\n", vsp->frame_freq);
+                } else {
+                    vsp->frame_freq = 0;
+                }
+
+                msfh->video_stream_params[i] = vsp;
+            }
         }
 
         // 音频流参数
-        length = msfh->audio_section_size->stream_count;
-        msfh->audio_stream_params = malloc(sizeof(void*) * length);
-        for (i = 0; i < length; i++) {
-            AudioStreamParam *asp = malloc(sizeof(AudioStreamParam));
+        if (msfh->audio_section_flag) {
+            length = msfh->audio_section_size->stream_count;
+            msfh->audio_stream_params = malloc(sizeof(void*) * length);
+            for (i = 0; i < length; i++) {
+                AudioStreamParam *asp = audio_stream_param_new();
 
-            ui8 = stream_read(stream);
-            asp->algorithm_type = ui8 >> 4;
-            asp->code_rate_flag = ui8 >> 3;
-            asp->sample_rate_flag = ui8 >> 2;
-            asp->desc_flag = ui8 >> 1;
-            bytes += 1;
-            debug("AudioStreamParam.algorithm_type=0x%x\n", asp->algorithm_type);
-            debug("AudioStreamParam.code_rate_flag=0x%x\n", asp->code_rate_flag);
-            debug("AudioStreamParam.sample_rate_flag=0x%x\n", asp->sample_rate_flag);
-            debug("AudioStreamParam.desc_flag=0x%x\n", asp->desc_flag);
-
-            // 音频码率
-            if (asp->code_rate_flag) {
-                stream_read_uint16(stream, &ui16);
-                asp->code_rate = ui16 >> 2;
-                bytes += 2;
-                debug("AudioStreamParam.code_rate=0x%x\n", asp->code_rate);
-            } else {
-                asp->code_rate = 0;
-            }
-
-            // 音频采样率
-            if (asp->sample_rate_flag) {
                 ui8 = stream_read(stream);
-                asp->sample_rate = ui8;
+                asp->algorithm_type = ui8 >> 4;
+                asp->code_rate_flag = ui8 >> 3;
+                asp->sample_rate_flag = ui8 >> 2;
+                asp->desc_flag = ui8 >> 1;
                 bytes += 1;
-                debug("AudioStreamParam.sample_rate=0x%x\n", asp->sample_rate);
-            } else {
-                asp->sample_rate = 0;
-            }
+                debug("AudioStreamParam.algorithm_type=0x%x\n", asp->algorithm_type);
+                debug("AudioStreamParam.code_rate_flag=0x%x\n", asp->code_rate_flag);
+                debug("AudioStreamParam.sample_rate_flag=0x%x\n", asp->sample_rate_flag);
+                debug("AudioStreamParam.desc_flag=0x%x\n", asp->desc_flag);
 
-            // 音频流描述
-            if (asp->desc_flag) {
-                stream_read_uint24(stream, &ui32);
-                asp->desc = ui32;
-                bytes += 3;
-            } else {
-                asp->desc = 0;
-            }
-            debug("AudioStreamParam.desc=0x%x\n", asp->desc);
+                // 音频码率
+                if (asp->code_rate_flag) {
+                    stream_read_uint16(stream, &ui16);
+                    asp->code_rate = ui16 >> 2;
+                    bytes += 2;
+                    debug("AudioStreamParam.code_rate=0x%x\n", asp->code_rate);
+                } else {
+                    asp->code_rate = 0;
+                }
 
-            msfh->audio_stream_params[i] = asp;
+                // 音频采样率
+                if (asp->sample_rate_flag) {
+                    ui8 = stream_read(stream);
+                    asp->sample_rate = ui8;
+                    bytes += 1;
+                    debug("AudioStreamParam.sample_rate=0x%x\n", asp->sample_rate);
+                } else {
+                    asp->sample_rate = 0;
+                }
+
+                // 音频流描述
+                if (asp->desc_flag) {
+                    stream_read_uint24(stream, &ui32);
+                    asp->desc = ui32;
+                    bytes += 3;
+                } else {
+                    asp->desc = 0;
+                }
+                debug("AudioStreamParam.desc=0x%x\n", asp->desc);
+
+                msfh->audio_stream_params[i] = asp;
+            }
         }
     } else {
         msfh->video_stream_params = NULL;
@@ -679,32 +636,19 @@ INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, M
 
     // 视频段
     if (msf->header->video_section_flag) {
-        VideoSection *vs = malloc(sizeof(VideoSection));
+        VideoSection *vs = video_section_new();
 
         // 视频段头长度
         stream_read_uint16(stream, &ui16);
         length = ui16 >> 4;
         bytes += 2;
-        //vs->header_length = ui16;
         debug("VideoSection.header_length=%d\n", length);
-
-#if 0
-        for (i = 0, length = 0; i < vs->header_length - 2; length++) {
-            stream_read_uint24(stream, &ui32);
-            if (0x00010000 == (ui32 & 0x00010000)) {
-                stream_read_uint16(stream, &ui16);
-                i += 2;
-            }
-            length += 3;
-        }
-        stream_unreads(stream, vs->header_length);
-#endif
 
         // 视频单元参数（按最大单元数算）
         length -= 2; // 去掉视频段头长度
         vs->unit_params = malloc(sizeof(void*) * (length / 3));
         for (i = vs->unit_count = 0; length > 0; vs->unit_count++, i++) {
-            VideoUnitParam *vup = malloc(sizeof(VideoUnitParam));
+            VideoUnitParam *vup = video_unit_param_new();
 
             stream_read_uint16(stream, &ui16);
             vup->length = ui16;
@@ -722,7 +666,6 @@ INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, M
             debug("VideoUnitParam[%d].frame_end_flag=0x%x\n", i, vup->frame_end_flag);
             debug("VideoUnitParam[%d].play_time_flag=0x%x\n", i, vup->play_time_flag);
 
-            //vs->header_length -= 3;
             length -= 3;
 
             // 相对播放时间
@@ -730,7 +673,6 @@ INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, M
                 stream_read_uint16(stream, &ui16);
                 vup->play_time = ui16;
                 bytes += 2;
-                //vs->header_length -= 2;
                 length -= 2;
                 debug("VideoUnitParam[%d].play_time=%d\n", i, vup->play_time);
             }
@@ -748,20 +690,16 @@ INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, M
             VideoUnitParam *vup = vs->unit_params[i];
             length += vup->length;
         }
-        vs->data = malloc(length);
+        vs->data = malloc(sizeof(uint8_t) * length);
         stream_reads(stream, vs->data, length);
         bytes += length;
 
         msf->video_section = vs;
-
-        if (visitor && visitor->visit_video_section) {
-            visitor->visit_video_section(msfh, msf->video_section, NULL);
-        }
     }
 
     // 音频段
     if (msf->header->audio_section_flag) {
-        AudioSection *as = malloc(sizeof(AudioSection));
+        AudioSection *as = audio_section_new();
 
         ui8 = stream_read(stream);
         as->unit_count = ui8;
@@ -770,7 +708,7 @@ INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, M
 
         as->unit_params = malloc(sizeof(void*) * as->unit_count);
         for (i = 0; i < as->unit_count; i++) {
-            AudioUnitParam *aup = malloc(sizeof(AudioUnitParam));
+            AudioUnitParam *aup = audio_unit_param_new();
 
             stream_read_uint16(stream, &ui16);
             aup->length = ui16;
@@ -799,25 +737,16 @@ INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, M
             AudioUnitParam *aup = as->unit_params[i];
             length += aup->length;
         }
-        as->data = malloc(length);
+        as->data = malloc(sizeof(uint8_t) * length);
         stream_reads(stream, as->data, length);
         bytes += length;
 
         msf->audio_section = as;
-
-        if (visitor && visitor->visit_audio_section) {
-            visitor->visit_audio_section(msfh, msf->audio_section, NULL);
-        }
     }
 
     // 数据段
     if (msf->header->data_section_flag) {
-        DataSection *ds = malloc(sizeof(DataSection));
-
-#if 0
-        write_data("/home/johnson/"DAT_FILE_ESG, stream, BUF_SIZE);
-        exit(0);
-#endif
+        DataSection *ds = data_section_new();
 
         ui8 = stream_read(stream);
         ds->unit_count = ui8;
@@ -826,7 +755,7 @@ INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, M
 
         ds->unit_params = malloc(sizeof(void*) * ds->unit_count);
         for (i = 0; i < ds->unit_count; i++) {
-            DataUnitParam *dup = malloc(sizeof(DataUnitParam));
+            DataUnitParam *dup = data_unit_param_new();
 
             ui8 = stream_read(stream);
             dup->type = ui8;
@@ -850,16 +779,12 @@ INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream, M
             DataUnitParam *dup = ds->unit_params[i];
             length += dup->length;
         }
-        ds->data = malloc(length);
+        ds->data = malloc(sizeof(uint8_t) * length);
         stream_reads(stream, ds->data, length);
         bytes += length;
         debug("DataSection.length=%d\n", length);
 
         msf->data_section = ds;
-
-        if (visitor && visitor->visit_data_section) {
-            visitor->visit_data_section(msfh, msf->data_section, NULL);
-        }
     }
 
     debug("bytes=%d\n", bytes);
@@ -877,7 +802,39 @@ MFSParser* mfsparser_new(void)
     return parser;
 }
 
-MuxFrameHeader* mfsparser_parse_header(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+void mfsparser_set_state(MFSParser *parser, MFSParserState state)
+{
+    parser->state = state;
+}
+
+MFSParserState mfsparser_get_state(MFSParser *parser)
+{
+    return parser->state;
+}
+
+MuxFrameHeader* mfsparser_get_mux_frame_header(MFSParser *parser)
+{
+    return parser->mf_header;
+}
+
+int mfsparser_get_current_sub_frame_index(MFSParser *parser)
+{
+    return parser->msf_index;
+}
+
+size_t mfsparser_get_current_sub_frame_size(MFSParser *parser)
+{
+    if (parser->state == STATE_NONE || parser->mf_header)
+        goto __RETURN__;
+
+    if (parser->mf_header->sub_frame_lengths)
+        return parser->mf_header->sub_frame_lengths[parser->msf_index];
+
+__RETURN__:
+    return 0;
+}
+
+MuxFrameHeader* mfsparser_parse_mux_frame_header(MFSParser *parser, ByteStream *stream)
 {
     register int i;
     uint8_t ui8;
@@ -888,7 +845,7 @@ MuxFrameHeader* mfsparser_parse_header(MFSParser *parser, ByteStream *stream, MF
         return NULL;
 
     // 复用帧头
-    MuxFrameHeader *mfh = malloc(sizeof(MuxFrameHeader));
+    MuxFrameHeader *mfh = mux_frame_header_new();
 
     stream_read_uint32(stream, &ui32);
     mfh->start_code = ui32;
@@ -897,10 +854,10 @@ MuxFrameHeader* mfsparser_parse_header(MFSParser *parser, ByteStream *stream, MF
 
     stream_read_uint16(stream, &ui16);
     mfh->protocol_version = ui16 >> 11;
-    mfh->protocal_min_version = ui16 >> 6;
+    mfh->protocol_min_version = ui16 >> 6;
     mfh->id = ui16;
     debug("MuxFrameHeader.protocol_version=0x%x\n", mfh->protocol_version);
-    debug("MuxFrameHeader.protocal_min_version=0x%x\n", mfh->protocal_min_version);
+    debug("MuxFrameHeader.protocol_min_version=0x%x\n", mfh->protocol_min_version);
     debug("MuxFrameHeader.id=0x%x\n", mfh->id);
 
     ui8 = stream_read(stream);
@@ -930,7 +887,9 @@ MuxFrameHeader* mfsparser_parse_header(MFSParser *parser, ByteStream *stream, MF
     debug("MuxFrameHeader.ESG_update_index=%d\n", mfh->ESG_update_index);
 
     ui8 = stream_read(stream);
+    mfh->ext_update_index = ui8 >> 4;
     mfh->sub_frame_count = ui8;
+    debug("MuxFrameHeader.ext_update_index=%d\n", mfh->ext_update_index);
     debug("MuxFrameHeader.sub_frame_count=%d\n", mfh->sub_frame_count);
 
     // 复用子帧长度
@@ -943,7 +902,7 @@ MuxFrameHeader* mfsparser_parse_header(MFSParser *parser, ByteStream *stream, MF
 
     // 下一帧参数指示
     if (mfh->NFP_flag) {
-        NextFrameParam *nfp = malloc(sizeof(NextFrameParam));
+        NextFrameParam *nfp = next_frame_param_new();
 
         ui8 = stream_read(stream);
         nfp->header_length = ui8;
@@ -968,156 +927,198 @@ MuxFrameHeader* mfsparser_parse_header(MFSParser *parser, ByteStream *stream, MF
     return mfh;
 }
 
-void mfsparser_parse(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
+
+void mfsparser_parse_mux_frame(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
 {
     register char cit_id = EOF;
     register size_t stream_size, msf_size;
 
 __PARSE_BEGIN__:
+    for (;;) {
+        // parse the frame header
+        if (NULL == parser->mf_header || STATE_NONE == parser->state) {
+            if (parser->mf_header) {
+                mux_frame_header_free(&parser->mf_header);
+            }
 
-    // parse the frame header
-    if (NULL == parser->mf_header || STATE_NONE == parser->state) {
-        if (parser->mf_header) {
-            mux_frame_header_free(&parser->mf_header);
+            parser->mf_header = mfsparser_parse_mux_frame_header(parser, stream);
+            if (NULL == parser->mf_header)
+                return;
+
+            parser->msf_index = 0;
+            parser->state = parser->mf_header->id ? STATE_MSF : STATE_CIT;
         }
 
-        if (NULL == (parser->mf_header = mfsparser_parse_header(parser, stream, visitor)))
-            return;
+        // parse the sub frames
+        while (parser->msf_index < parser->mf_header->sub_frame_count) {
+            MuxFrameHeader *mfh = parser->mf_header;
+            stream_size = stream_get_size(stream);
+            msf_size = mfh->sub_frame_lengths[parser->msf_index];
 
-        parser->msf_index = 0;
-        parser->state = parser->mf_header->id ? STATE_MSF : STATE_CIT;
-    }
+            debug("parse sub frame [%d]:%d\n", parser->msf_index, msf_size);
 
-    // parse the sub frames
-    while (parser->msf_index < parser->mf_header->sub_frame_count) {
-        MuxFrameHeader *mfh = parser->mf_header;
-        stream_size = stream_get_size(stream);
-        msf_size = mfh->sub_frame_lengths[parser->msf_index];
+            if (parser->mf_header && stream_size < msf_size) {
+                debug("stream size:%d < frame size:%d\n", stream_size, msf_size);
+                return;
+            }
 
-        debug("parse sub frame [%d]:%d\n", parser->msf_index, msf_size);
+            switch (parser->state) {
+            case STATE_NONE:
+                goto __PARSE_BEGIN__;
+            case STATE_CIT:
+                cit_id = stream_read(stream);
 
-        if (parser->mf_header && stream_size < msf_size) {
-            debug("stream size:%d < frame size:%d\n", stream_size, msf_size);
-            return;
-        }
+                switch (cit_id) {
+                case CIT_NIT:
+                    stream_unread(stream);
 
-        switch (parser->state) {
-        case STATE_NONE:
-            goto __PARSE_BEGIN__;
-        case STATE_CIT:
-            cit_id = stream_read(stream);
+                    NIT *nit = parse_NIT(parser, stream);
+                    PARSE_NEXT_IF(NULL == nit);
 
-            switch (cit_id) {
-            case CIT_NIT:
-                stream_unread(stream);
+                    if (visitor && visitor->visit_NIT) {
+                        visitor->visit_NIT(nit, parser);
+                    }
 
-                NIT *nit = parse_NIT(parser, stream, visitor);
+                    nit_free(&nit);
+                    break;
+                case CIT_CMCT:
+                    stream_unread(stream);
 
-                if (visitor && visitor->visit_NIT) {
-                    visitor->visit_NIT(nit, NULL);
+                    CMCT *cmct = parse_XMCT(parser, stream);
+                    PARSE_NEXT_IF(NULL == cmct);
+
+                    if (visitor && visitor->visit_CMCT) {
+                        visitor->visit_CMCT(cmct, parser);
+                    }
+
+                    xmct_free(&cmct);
+                    break;
+                case CIT_CSCT:
+                    stream_unread(stream);
+
+                    CSCT *csct = parse_XSCT(parser, stream);
+                    PARSE_NEXT_IF(NULL == csct);
+
+                    if (visitor && visitor->visit_CSCT) {
+                        visitor->visit_CSCT(csct, parser);
+                    }
+
+                    xsct_free(&csct);
+                    break;
+                case CIT_SMCT:
+                    stream_unread(stream);
+
+                    SMCT *smct = parse_XMCT(parser, stream);
+                    PARSE_NEXT_IF(NULL == smct);
+
+                    if (visitor && visitor->visit_SMCT) {
+                        visitor->visit_SMCT(smct, parser);
+                    }
+
+                    xmct_free(&smct);
+                    break;
+                case CIT_SSCT:
+                    stream_unread(stream);
+
+                    SSCT *ssct = parse_XSCT(parser, stream);
+                    PARSE_NEXT_IF(NULL == ssct);
+
+                    if (visitor && visitor->visit_SSCT) {
+                        visitor->visit_SSCT(ssct, parser);
+                    }
+
+                    xsct_free(&ssct);
+                    break;
+                case CIT_ESGBDT:
+                    stream_unread(stream);
+
+                    ESGBDT *esgbdt = parse_ESGBDT(parser, stream);
+                    PARSE_NEXT_IF(NULL == esgbdt);
+
+                    if (visitor && visitor->visit_ESGBDT) {
+                        visitor->visit_ESGBDT(esgbdt, parser);
+                    }
+
+                    esgbdt_free(&esgbdt);
+                    break;
+                case CIT_EB:
+                    stream_unread(stream);
+
+                    EB *eb = parse_EB(parser, stream);
+                    PARSE_NEXT_IF(NULL == eb);
+
+                    if (visitor && visitor->visit_EB) {
+                        visitor->visit_EB(eb, parser);
+                    }
+
+                    eb_free(&eb);
+                    break;
+                case CIT_EADT:
+                    stream_unread(stream);
+
+                    EADT *eadt = parse_EADT(parser, stream);
+                    PARSE_NEXT_IF(NULL == eadt);
+
+                    if (visitor && visitor->visit_EADT) {
+                        visitor->visit_EADT(eadt, parser);
+                    }
+
+                    eadt_free(&eadt);
+                    break;
+                case CIT_CIDT:
+                    stream_unread(stream);
+
+                    CIDT *ci = parse_CIDT(parser, stream);
+                    PARSE_NEXT_IF(NULL == ci);
+
+                    if (visitor && visitor->visit_CIDT) {
+                        visitor->visit_CIDT(ci, parser);
+                    }
+
+                    cidt_free(&ci);
+                default:
+                    warn("undefined ctrl info table 0x%x\n", cit_id);
+                    stream_reads(stream, NULL, msf_size - 1);
+                    warn("skip frame[%d] bytes %d\n", parser->msf_index, msf_size);
+                    break;
+                } // #switch - parse ctrl info table
+                break;
+
+            case STATE_MSF:;
+                MuxSubFrame *msf = parse_mux_sub_frame(parser, stream);
+                PARSE_NEXT_IF(NULL == msf);
+
+                MuxSubFrameHeader *msfh = msf->header;
+
+                if (msfh->video_section_flag && visitor
+                        && visitor->visit_video_section) {
+                    visitor->visit_video_section(msfh, msf->video_section, parser);
                 }
 
-                nit_free(&nit);
-                break;
-            case CIT_CMCT:
-                stream_unread(stream);
-
-                CMCT *cmct = parse_XMCT(parser, stream, visitor);
-                PARSE_END_IF(NULL == cmct);
-
-                if (visitor && visitor->visit_CMCT) {
-                    visitor->visit_CMCT(cmct, NULL);
+                if (msfh->audio_section_flag && visitor
+                        && visitor->visit_audio_section) {
+                    visitor->visit_audio_section(msfh, msf->audio_section, parser);
                 }
 
-                xmct_free(&cmct);
-                break;
-            case CIT_CSCT:
-                stream_unread(stream);
-
-                CSCT *csct = parse_XSCT(parser, stream, visitor);
-                PARSE_END_IF(NULL == csct);
-
-                if (visitor && visitor->visit_CSCT) {
-                    visitor->visit_CSCT(csct, NULL);
+                if (msfh->data_section_flag && visitor
+                        && visitor->visit_data_section) {
+                    visitor->visit_data_section(msfh, msf->data_section, parser);
                 }
 
-                xsct_free(&csct);
+                mux_sub_frame_free(&msf);
                 break;
-            case CIT_SMCT:
-                stream_unread(stream);
 
-                SMCT *smct = parse_XMCT(parser, stream, visitor);
-                PARSE_END_IF(NULL == smct);
-
-                if (visitor && visitor->visit_SMCT) {
-                    visitor->visit_SMCT(smct, NULL);
-                }
-
-                xmct_free(&smct);
-                break;
-            case CIT_SSCT:
-                stream_unread(stream);
-
-                SSCT *ssct = parse_XSCT(parser, stream, visitor);
-                PARSE_END_IF(NULL == ssct);
-
-                if (visitor && visitor->visit_SSCT) {
-                    visitor->visit_SSCT(ssct, NULL);
-                }
-
-                xsct_free(&ssct);
-                break;
-            case CIT_ESGBDT:
-                stream_unread(stream);
-
-                ESGBDT *esgbdt = parse_ESGBDT(parser, stream, visitor);
-                PARSE_END_IF(NULL == esgbdt);
-
-                if (visitor && visitor->visit_ESGBDT) {
-                    visitor->visit_ESGBDT(esgbdt, NULL);
-                }
-
-                esgbdt_free(&esgbdt);
-                break;
-            case CIT_EB:
-                stream_unread(stream);
-
-                EB *eb = parse_EB(parser, stream, visitor);
-                PARSE_END_IF(NULL == eb);
-
-                if (visitor && visitor->visit_EB) {
-                    visitor->visit_EB(eb, NULL);
-                }
-
-                eb_free(&eb);
-                break;
             default:
-                warn("undefined ctrl info table 0x%x\n", cit_id);
-                stream_reads(stream, NULL, msf_size - 1);
-                warn("skip frame[%d] bytes %d\n", parser->msf_index, msf_size);
-                break;
-            } // #switch - parse ctrl info table
-            break;
+                warn("MFSParser unknown state %d\n", parser->state);
+                parser->state = STATE_NONE;
+                goto __PARSE_BEGIN__;
+            } // #switch - parse frame payload
 
-        case STATE_MSF:;
-            MuxSubFrame *msf = parse_mux_sub_frame(parser, stream, visitor);
+            parser->msf_index++;
+        } // #while - multiplex sub frames
 
-            mux_sub_frame_free(&msf);
-            break;
-
-        default:
-            warn("MFSParser unknown state %d\n", parser->state);
-            parser->state = STATE_NONE;
-            goto __PARSE_END__;
-        } // #switch - parse frame payload
-
-        parser->msf_index++;
-    } // #while - multiplex sub frames
-
-    parser->state = STATE_NONE;
-
-__PARSE_END__:
-    return;
+        parser->state = STATE_NONE;
+    };
 }
 
 void mfsparser_free(MFSParser **parser)

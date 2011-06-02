@@ -33,6 +33,7 @@
 </option>
 <option id="gnu.c.compiler.option.preprocessor.def.symbols.362140976" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" valueType="definedSymbols">
 <listOptionValue builtIn="false" value="__X86__"/>
+<listOptionValue builtIn="false" value="__DEBUG__"/>
 </option>
 <inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1023083955" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 </tool>

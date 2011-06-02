@@ -1,7 +1,7 @@
 #include <stddef.h>
-#include <stdlib.h>
 #include <stdint.h>
-#include <bytestream.h>
+#include <stdlib.h>
+#include <string.h>
 
 #ifndef __MFS_TYPES_H__
 #define __MFS_TYPES_H__
@@ -14,10 +14,13 @@
 #endif
 
 #undef  MIN
-#define MIN(a, b) ((a) > (b) ? (b) : (a));
+#define MIN(a, b) ((a) > (b) ? (b) : (a))
 
 #undef  MAX
-#define MAX(a, b) ((a) > (b) ? (a) : (b));
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
+#undef  ABS
+#define ABS(a) ((a) < 0 ? -(a) : (a))
 
 typedef enum CtrlInfoTableID         CtrlInfoTableID;     // 控制信息表ID
 typedef enum RSCodeRate              RSCodeRate;          // RS码率
@@ -29,6 +32,8 @@ typedef enum FrameFrequency          FrameFrequency;      // 帧频
 typedef enum SampleRate              SampleRate;          // 采样率
 typedef enum FrameType               FrameType;           // 帧类型
 typedef enum DataUnitType            DataUnitType;        // 数据单元类型
+typedef enum EncapsulationMode       EncapsulationMode;   // 复用子帧封装模式
+typedef enum ServiceMode             ServiceMode;         // 业务模式
 
 typedef struct NextFrameParam        NextFrameParam;      // 下一帧关键参数
 typedef struct MuxFrameHeader        MuxFrameHeader;      // 复用帧头
@@ -43,6 +48,13 @@ typedef struct XMCT                  XMCT, CMCT, SMCT;    // 持续/短时间业
 typedef struct XSCT                  XSCT, CSCT, SSCT;    // 持续/短时间业务配置表
 typedef struct ESGBDT                ESGBDT;              // 电子业务指南基本描述表
 typedef struct EB                    EB;                  // 紧急广播
+typedef struct EADT                  EADT;                // 加密授权描述表
+typedef struct CIDT                  CIDT;                // 公共信息描述表
+typedef struct CommonInfo            CommonInfo;          // 公共信息
+typedef struct EBDataSection         EBDataSection;       // 紧急广播数据段
+typedef struct EBMessage             EBMessage;           // 紧急广播消息
+typedef struct EBTrigParam           EBTrigParam;         // 触发参数
+typedef struct EBMessageParam        EBMessageParam;      // 消息参数
 
 typedef struct MuxSubFrame           MuxSubFrame;         // 复用子帧
 typedef struct MuxSubFrameHeader     MuxSubFrameHeader;   // 复用子帧头
@@ -66,7 +78,9 @@ enum CtrlInfoTableID
     CIT_SMCT   = 0x04,              // 短时间业务复用配置表
     CIT_SSCT   = 0x05,              // 短时间业务配置表
     CIT_ESGBDT = 0x06,              // ESG基本描述表
-    CIT_EB     = 0x10               // 紧急广播
+    CIT_EADT   = 0x07,              // 加密授权描述表
+    CIT_EB     = 0x10,              // 紧急广播
+    CIT_CIDT   = 0x11               // 公共信息描述表
 };
 
 enum RSCodeRate
@@ -139,7 +153,30 @@ enum FrameType
 
 enum DataUnitType
 {
-    DATA_UNIT_TYPE_ESG = 0x00
+    DATA_UNIT_TYPE_ESG = 0x00,      // ESG数据
+    DATA_UNIT_TYPE_PROGRAM,         // 节目提示信息
+
+    DATA_UNIT_TYPE_ECM_128 = 0x80,  // ECM(128), 第一个CAS系统使用
+    DATA_UNIT_TYPE_EMM_129,         // EMM(129), 第一个CAS系统使用
+    DATA_UNIT_TYPE_ECM_130,         // ECM(128), 第二个CAS系统使用
+    DATA_UNIT_TYPE_EMM_131,         // EMM(129), 第二个CAS系统使用
+    DATA_UNIT_TYPE_ECM_132,         // ECM(128), 第三个CAS系统使用
+    DATA_UNIT_TYPE_EMM_133,         // EMM(129), 第三个CAS系统使用
+
+    DATA_UNIT_TYPE_XPE = 0xA0,      // XPE包
+    DATA_UNIT_TYPE_XPE_FEC          // XPE-FEC包
+};
+
+enum EncapsulationMode
+{
+    ENCAPSULATION_MODE2 = 0x00,     // 封装模式2
+    ENCAPSULATION_MODE1,            // 封装模式1
+};
+
+enum ServiceMode
+{
+    STREAM_MODE = 0x00,             // 流模式
+    FILE_MODE,                      // 文件模式
 };
 
 struct NextFrameParam
@@ -156,7 +193,7 @@ struct MuxFrameHeader
     uint32_t length                       : 8;
 
     uint32_t id                           : 6;
-    uint32_t protocal_min_version         : 5;
+    uint32_t protocol_min_version         : 5;
     uint32_t protocol_version             : 5;
 
     uint32_t CTUIA_flag                   : 2;
@@ -174,7 +211,7 @@ struct MuxFrameHeader
     uint32_t SSCT_update_index            : 4;
 
     uint32_t sub_frame_count              : 4;
-    uint32_t                              : 4;
+    uint32_t ext_update_index             : 4;
 
     uint32_t *sub_frame_lengths;
 
@@ -227,7 +264,7 @@ struct MuxFrameParam
 struct MuxSubFrameParam
 {
     uint32_t                              : 4;
-    uint32_t sub_frame_id                 : 4;
+    uint32_t index                        : 4;
 
     uint32_t service_id                   : 16;
 };
@@ -238,12 +275,28 @@ struct Service
     uint32_t freq_point_index             : 8;
 };
 
+struct CommonInfo
+{
+    uint32_t custom_id                    : 16;
+    uint32_t ext_flag                     : 16;
+
+    uint32_t                              : 4;
+    uint32_t update_index                 : 4;
+    uint32_t service_id                   : 16;
+    uint32_t custom_name_length           : 8;
+
+    uint8_t *custom_name;
+
+    uint8_t trig_msg_length               : 8;
+    uint8_t *trig_msg;
+};
+
 struct NIT
 {
     uint32_t id                           : 8;
 
     uint32_t                              : 4;
-    uint32_t NIT_update_index             : 4;
+    uint32_t update_index                 : 4;
 
     uint32_t MJD                          : 16;
     uint64_t BCD                          : 24;
@@ -300,16 +353,69 @@ struct XSCT
 
 struct ESGBDT
 {
+    uint8_t id                            : 8;
+};
+
+struct EADT
+{
+};
+
+struct CIDT
+{
+    uint8_t id                            : 8;
+
+    uint32_t                              : 12;
+    uint32_t update_index                 : 4;
+    union {
+        uint32_t data_length              : 16;
+        uint32_t ci_count                 : 16;
+    };
+
+    CommonInfo **comm_infos;
 };
 
 struct EB
 {
     uint32_t id                           : 8;
+    uint32_t msg_count                    : 4;
+    uint32_t                              : 2;
     uint32_t index                        : 2;
-    uint32_t                              : 6;
     uint32_t data_length                  : 16;
 
     uint8_t *data;
+};
+
+struct EBDataSection
+{
+    uint16_t protocol_version             : 4;
+    uint16_t protocol_min_version         : 4;
+    uint16_t net_level                    : 4;
+    uint16_t net_id                       : 12;
+    uint16_t msg_id                       : 16;
+    uint16_t curr_section_index           : 8;
+    uint16_t last_section_index           : 8;
+    uint16_t                              : 3;
+    uint16_t data_length                  : 13;
+    uint8_t *data;
+};
+
+struct EBMessage
+{
+    uint32_t trig_flag                    : 1;
+    union {
+        EBTrigParam *trig_param;
+        EBMessageParam *msg_param;
+    };
+};
+
+struct EBMessageParam
+{
+
+};
+
+struct EBTrigParam
+{
+
 };
 
 struct SectionSize
@@ -451,13 +557,118 @@ struct DataSection
 extern "C" {
 #endif
 
+extern NextFrameParam* next_frame_param_new(void);
+extern void next_frame_param_free(NextFrameParam **nfp);
+
+extern MuxFrameHeader* mux_frame_header_new(void);
 extern void mux_frame_header_free(MuxFrameHeader **mfh);
+
+extern FreqPoint* freq_point_new(void);
+extern FreqPoint* freq_point_clone(FreqPoint **clone, FreqPoint *fp);
+extern void freq_point_free(FreqPoint **fp);
+
+extern AdjacentNet* adjacent_net_new(void);
+extern AdjacentNet* adjacent_net_clone(AdjacentNet **clone, AdjacentNet *an);
+extern void adjacent_net_free(AdjacentNet **an);
+
+extern MuxFrameParam* mux_frame_param_new(void);
+extern MuxFrameParam* mux_frame_param_clone(MuxFrameParam **clone, MuxFrameParam *mfp);
+extern void mux_frame_param_free(MuxFrameParam **mfp);
+
+extern TimeSlot* time_slot_new(void);
+extern TimeSlot* time_slot_clone(TimeSlot **clone, TimeSlot *ts);
+extern void time_slot_free(TimeSlot **ts);
+
+extern MuxSubFrameParam* mux_sub_frame_param_new(void);
+extern MuxSubFrameParam* mux_sub_frame_param_clone(MuxSubFrameParam **clone, MuxSubFrameParam *msfp);
+extern void mux_sub_frame_param_free(MuxSubFrameParam **msfp);
+
+extern Service* service_new(void);
+extern Service* service_clone(Service **clone, Service *s);
+extern void service_free(Service **s);
+
+extern NIT* nit_new(void);
+extern NIT* nit_clone(NIT **clone, NIT *nit);
 extern void nit_free(NIT **nit);
+
+extern XMCT* xmct_new(void);
+extern XMCT* xmct_clone(XMCT **clone, XMCT *xmct);
 extern void xmct_free(XMCT **xmct);
+
+extern XSCT* xsct_new(void);
+extern XSCT* xsct_clone(XSCT **clone, XSCT *xsct);
 extern void xsct_free(XSCT **xsct);
+
+extern ESGBDT* esgbdt_new(void);
+extern ESGBDT* esgbdt_clone(ESGBDT **clone, ESGBDT *esgbdt);
 extern void esgbdt_free(ESGBDT **esgbdt);
+
+extern EB* eb_new(void);
 extern void eb_free(EB **eb);
+
+extern EADT* eadt_new(void);
+extern EADT* eadt_clone(EADT **clone, EADT *eadt);
+extern void eadt_free(EADT **eadt);
+
+extern CIDT* cidt_new(void);
+extern CIDT* cidt_clone(CIDT **clone, CIDT *cidt);
+extern void cidt_free(CIDT **ci);
+
+extern CommonInfo* common_info_new(void);
+extern CommonInfo* common_info_clone(CommonInfo **clone, CommonInfo *ci);
+extern void common_info_free(CommonInfo **ci);
+
+extern EBDataSection* eb_data_section_new(void);
+extern void eb_data_section_free(EBDataSection **ebds);
+
+extern EBMessage* eb_message_new(void);
+extern void eb_message_free(EBMessage **ebmsg);
+
+extern EBTrigParam* eb_trig_param_new(void);
+extern void eb_trig_param_free(EBTrigParam **ebtp);
+
+extern EBMessageParam* eb_message_param_new(void);
+extern void eb_message_param_free(EBMessageParam **ebmp);
+
+extern MuxSubFrame* mux_sub_frame_new(void);
 extern void mux_sub_frame_free(MuxSubFrame **msf);
+
+extern MuxSubFrameHeader* mux_sub_frame_header_new(void);
+extern void mux_sub_frame_header_free(MuxSubFrameHeader **msfh);
+
+extern VideoSection* video_section_new(void);
+extern void video_section_free(VideoSection **vs);
+
+extern AudioSection* audio_section_new(void);
+extern void audio_section_free(AudioSection **as);
+
+extern DataSection* data_section_new(void);
+extern void data_section_free(DataSection **ds);
+
+extern SectionSize* section_size_new(void);
+extern void section_size_free(SectionSize **ss);
+
+extern DisplayParam* display_param_new(void);
+extern void display_param_free(DisplayParam **dp);
+
+extern ResolutionParam* resolution_param_new(void);
+extern void resolution_param_free(ResolutionParam **rp);
+
+extern VideoStreamParam* video_stream_param_new(void);
+extern void video_stream_param_free(VideoStreamParam **vsp);
+
+extern AudioStreamParam* audio_stream_param_new(void);
+extern void audio_stream_param_free(AudioStreamParam **asp);
+
+extern VideoUnitParam* video_unit_param_new(void);
+extern void video_unit_param_free(VideoUnitParam **vup);
+
+extern AudioUnitParam* audio_unit_param_new(void);
+extern void audio_unit_param_free(AudioUnitParam **aup);
+
+extern DataUnitParam* data_unit_param_new(void);
+extern void data_unit_param_free(DataUnitParam **dup);
+
 
 #ifdef __cplusplus
 }

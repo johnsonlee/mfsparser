@@ -6,8 +6,8 @@ OBJDIR   := .obj
 SRCDIR   := src
 TARGET   := mfsparser
 
-DEFINES  += -D__X86__
-CFLAGS   := -ggdb -O0 -g3 -Wall -I$(PWD)/include
+DEFINES  := 
+CFLAGS   := -O0 -g3 -Wall -I$(PWD)/include
 LDFLAGS  := 
 
 SOURCES  := $(SRCDIR)/bytestream.c \

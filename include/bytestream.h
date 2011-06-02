@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <mfstypes.h>
 
 #ifndef __BYTE_STREAM_H__
 #define __BYTE_STREAM_H__
