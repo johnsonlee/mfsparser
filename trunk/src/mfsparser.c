@@ -945,6 +945,10 @@ __PARSE_BEGIN__:
             if (NULL == parser->mf_header)
                 return;
 
+            if (visitor && visitor->visit_mux_frame_header) {
+                visitor->visit_mux_frame_header(parser->mf_header, parser);
+            }
+
             parser->msf_index = 0;
             parser->state = parser->mf_header->id ? STATE_MSF : STATE_CIT;
         }

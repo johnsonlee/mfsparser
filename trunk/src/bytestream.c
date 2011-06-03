@@ -92,7 +92,7 @@ ByteStream* stream_write(ByteStream *stream, unsigned char *data, size_t size)
     return stream;
 }
 
-char stream_read(ByteStream *stream)
+int stream_read(ByteStream *stream)
 {
     stream_cleanup(stream);
 
@@ -104,7 +104,7 @@ char stream_read(ByteStream *stream)
     return EOF;
 }
 
-char stream_unread(ByteStream *stream)
+int stream_unread(ByteStream *stream)
 {
     ByteStream *buf = stream->next;
     if (buf && buf->data && buf->offset > 0) {
@@ -115,10 +115,9 @@ char stream_unread(ByteStream *stream)
     return EOF;
 }
 
-char stream_read_uint16(ByteStream *stream, uint16_t *value)
+int stream_read_uint16(ByteStream *stream, uint16_t *value)
 {
-    register int i;
-    register char bval = EOF;
+    register int i, bval = EOF;
 
     stream_cleanup(stream);
 
@@ -141,10 +140,9 @@ char stream_read_uint16(ByteStream *stream, uint16_t *value)
     return 2;
 }
 
-char stream_read_uint24(ByteStream *stream, uint32_t *value)
+int stream_read_uint24(ByteStream *stream, uint32_t *value)
 {
-    register int i;
-    register char bval = EOF;
+    register int i, bval = EOF;
 
     stream_cleanup(stream);
 
@@ -168,10 +166,9 @@ char stream_read_uint24(ByteStream *stream, uint32_t *value)
     return 3;
 }
 
-char stream_read_uint32(ByteStream *stream, uint32_t *value)
+int stream_read_uint32(ByteStream *stream, uint32_t *value)
 {
-    register int i;
-    register char bval = EOF;
+    register int i, bval = EOF;
 
     stream_cleanup(stream);
 

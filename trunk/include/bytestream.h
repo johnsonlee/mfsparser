@@ -18,15 +18,15 @@ extern ByteStream* stream_new();
 
 extern size_t stream_get_size(ByteStream *stream);
 
-extern char stream_read(ByteStream *stream);
+extern int stream_read(ByteStream *stream);
 
-extern char stream_unread(ByteStream *stream);
+extern int stream_unread(ByteStream *stream);
 
-extern char stream_read_uint16(ByteStream *stream, uint16_t *value);
+extern int stream_read_uint16(ByteStream *stream, uint16_t *value);
 
-extern char stream_read_uint24(ByteStream *stream, uint32_t *value);
+extern int stream_read_uint24(ByteStream *stream, uint32_t *value);
 
-extern char stream_read_uint32(ByteStream *stream, uint32_t *value);
+extern int stream_read_uint32(ByteStream *stream, uint32_t *value);
 
 extern size_t stream_reads(ByteStream *stream, void *dest, size_t size);
 
