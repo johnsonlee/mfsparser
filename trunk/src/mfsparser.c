@@ -675,6 +675,8 @@ INLINE MuxSubFrame* parse_mux_sub_frame(MFSParser *parser, ByteStream *stream)
                 bytes += 2;
                 length -= 2;
                 debug("VideoUnitParam[%d].play_time=%d\n", i, vup->play_time);
+            } else {
+            	vup->play_time = 0;
             }
 
             vs->unit_params[i] = vup;
@@ -926,7 +928,6 @@ MuxFrameHeader* mfsparser_parse_mux_frame_header(MFSParser *parser, ByteStream *
 
     return mfh;
 }
-
 
 void mfsparser_parse_mux_frame(MFSParser *parser, ByteStream *stream, MFSParserVisitor *visitor)
 {
