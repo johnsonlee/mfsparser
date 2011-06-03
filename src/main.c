@@ -109,6 +109,11 @@ __ERROR__:
 }
 
 INLINE void
+visit_mux_frame_header(MuxFrameHeader *mfh, MFSParser *parser)
+{
+}
+
+INLINE void
 visit_NIT(NIT *nit, MFSParser *parser)
 {
     if (gs_nit == NULL || gs_nit->update_index != nit->update_index) {
@@ -301,6 +306,7 @@ __NEXT__:
 }
 
 static MFSParserVisitor visitor = {
+    visit_mux_frame_header,
     visit_NIT,
     visit_CMCT,
     visit_SMCT,

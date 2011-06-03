@@ -17,6 +17,7 @@ enum MFSParserState
 
 struct MFSParserVisitor
 {
+    void (*visit_mux_frame_header)(MuxFrameHeader *mfh, MFSParser *parser);
     void (*visit_NIT)(NIT *nit, MFSParser *parser);
     void (*visit_CMCT)(CMCT *cmct, MFSParser *parser);
     void (*visit_SMCT)(SMCT *smct, MFSParser *parser);
